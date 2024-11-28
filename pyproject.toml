@@ -14,12 +14,22 @@ name = "fc-nixos-release-tools"
 dynamic = ["version"]
 requires-python = ">= 3.11"
 dependencies = [
-    "pygithub~=2.5",
-    "gitpython~=3.1",
-    "requests~=2.32.2",
-    "rich~=13.8.1"
+    "pygithub>=2.5",
+    "gitpython>=3.1",
+    "requests>=2.32",
+    "rich>=13.8",
+    "gql[requests]~=3.5",
+    "pydantic>=2.9",
+    "pygithub>=2.5",
+    "python-dateutil>=2.9"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.4"
 ]
 
 [project.scripts]
 release = "release:main"
 update-nixpkgs = "update_nixpkgs:main"
+auto-merge = "auto_merge:main"
