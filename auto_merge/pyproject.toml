@@ -20,6 +20,9 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
+  "gql[requests]",
+  "pydantic",
+  "pygithub",
   "python-dateutil"
 ]
 
@@ -27,6 +30,10 @@ dependencies = [
 dev = [
   "pytest>=7.4"
 ]
+
+[project.scripts]
+fc-automerge = "auto_merge.cli:main"
+
 
 [tool.hatch.version]
 path = "src/auto_merge/__about__.py"

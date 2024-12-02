@@ -1,34 +1,34 @@
 [general]
 # 0 = Monday, 6 = Sunday
-production-merge-day = 3
+production_merge_day = 3
 # Times are in Europe/Berlin
-production-merge-cutoff-hour = 12
+production_merge_cutoff_hour = 12
 
-[monitoring-review]
+[monitoring_review]
 # Names of monitoring review columns
 dev = "platform-dev"
 staging = "platform-staging"
 
-# Weekdays relative to the production-merge-day
-# 0 = production-merge-day, 1 = production-merge-day + 1
-# e.g. production-merge-day = Thursday. pr-merge-days.0 = THU, pr-merge-days.1=FRI, pr-merge-days.2=MON
-[pr-merge-days]
-[pr-merge-days.0]
-max-risk = 5
-min-urgency = 1
+# Weekdays relative to the production_merge_day
+# 0 = production_merge_day, 1 = production_merge_day + 1
+# e.g. production_merge_day = Thursday. pr_merge_days.0 = THU, pr_merge_days.1=FRI, pr_merge_days.2=MON
+[pr_merge_days]
+[pr_merge_days.0]
+max_risk = 5
+min_urgency = 1
 
-[pr-merge-days.1]
-max-risk = 4
-min-urgency = 1
+[pr_merge_days.1]
+max_risk = 4
+min_urgency = 1
 
-[pr-merge-days.2]
-max-risk = 3
-min-urgency = 2
+[pr_merge_days.2]
+max_risk = 3
+min_urgency = 2
 
-[pr-merge-days.3]
-max-risk = 2
-min-urgency = 3
+[pr_merge_days.3]
+max_risk = 2
+min_urgency = 3
 
-[pr-merge-days.4]
-max-risk = 1
-min-urgency = 5
+[pr_merge_days.4]
+max_risk = 1
+min_urgency = 5

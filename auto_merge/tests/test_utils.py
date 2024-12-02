@@ -5,14 +5,18 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from auto_merge.utils import (
+from auto_merge.config import (
     Config,
     GeneralConfig,
     PRMergeDayConfig,
+MonitoringReviewConfig
+)
+from auto_merge.utils import (
     calculate_merge_date,
     convert_relative_day_to_date,
     next_production_merge,
 )
+
 
 
 @pytest.fixture
@@ -28,6 +32,7 @@ def config():
         general=GeneralConfig(
             production_merge_day=3, production_merge_cutoff_hour=12
         ),
+        monitoring_review=MonitoringReviewConfig(dev="dev", staging="staging")
     )
 
 

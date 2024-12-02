@@ -1,0 +1,35 @@
+import dataclasses
+from dataclasses import dataclass
+
+import tomllib
+
+from pydantic import BaseModel
+
+
+class PRMergeDayConfig(BaseModel):
+    max_risk: int
+    min_urgency: int
+
+
+class GeneralConfig(BaseModel):
+    # Our days are virtual to the production merge day and cutoff hour
+    production_merge_day: int
+    production_merge_cutoff_hour: int
+
+
+class MonitoringReviewConfig(BaseModel):
+    dev: str
+    staging: str
+
+
+class Config(BaseModel):
+    pr_merge_days: dict[int, PRMergeDayConfig]
+    general: GeneralConfig
+    monitoring_review: MonitoringReviewConfig
+
+
+
+def load_config() -> Config:
+    with open("config.toml", "rb") as f:
+        data = tomllib.load(f)
+        return Config.model_validate(data)
