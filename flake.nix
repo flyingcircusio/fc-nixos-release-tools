@@ -15,8 +15,12 @@
           name = "fc-release";
           src = ./.;
           pyproject = true;
-          nativeBuildInputs = [ ppkgs.setuptools-scm ];
-          propagatedBuildInputs = [ ppkgs.setuptools pkgs.scriv pkgs.gh ];
+          build-system = [ ppkgs.setuptools-scm ];
+          dependencies = [
+            ppkgs.setuptools
+            pkgs.scriv
+            pkgs.gh
+          ];
         };
       });
 

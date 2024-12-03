@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from subprocess import CalledProcessError, check_output, run
 
-from nixpkgs_changelog import (
+from release.nixpkgs_changelog import (
     filter_and_merge_commit_msgs,
     get_interesting_commit_msgs,
     version_diff_lines,
