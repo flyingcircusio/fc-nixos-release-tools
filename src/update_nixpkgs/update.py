@@ -30,6 +30,7 @@ from git.exc import GitCommandError
 from github import Auth, Github
 
 from update_nixpkgs import FC_NIXOS_REPO, NIXPKGS_REPO
+from utils.matrix import MatrixHookshot
 
 NIXOS_VERSION_PATH = "release/nixos-version"
 PACKAGE_VERSIONS_PATH = "release/package-versions.json"
@@ -92,7 +93,8 @@ def rebase_nixpkgs(
     branch_to_rebase: str,
     integration_branch: str,
     last_day_integration_branch: str,
-    force: bool
+    force: bool,
+        matrix_hookshot: MatrixHookshot
 ) -> NixpkgsRebaseResult | None:
     logging.info("Trying to rebase nixpkgs repository.")
     if nixpkgs_repo.is_dirty():
@@ -124,6 +126,18 @@ def rebase_nixpkgs(
             nixpkgs_repo.git.rebase(f"upstream/{branch_to_rebase}")
         except GitCommandError:
             logging.exception("nixpkgs rebase failed")
+            matrix_hookshot.send_notification(f"""\
+update-nixpkgs: ERROR nixpkgs rebase failed for {branch_to_rebase}. Please resolve the conflict manually with the following commands:
+
+```
+cd nixpkgs
+git fetch upstream
+git fetch origin
+git checkout -b {integration_branch} origin/{branch_to_rebase}
+git rebase upstream/{branch_to_rebase}
+git push origin {integration_branch}
+```
+""")
             sys.exit(1)
 
         # Check if there are new commits compared to the last day's integration branch.
@@ -248,7 +262,9 @@ def run(
     nixpkgs_dir: str,
     force: bool,
     github_access_token: str,
+    matrix_hookshot_url: str
 ):
+    matrix_hookshot = MatrixHookshot(matrix_hookshot_url)
     today = datetime.date.today().isoformat()
     yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
 
@@ -276,7 +292,8 @@ def run(
             nixpkgs_target_branch,
             integration_branch,
             last_day_integration_branch,
-            force
+            force,
+            matrix_hookshot
         ):
             logging.info(
                 f"Updated 'nixpkgs' to '{result.fork_after_rebase.hexsha}'"

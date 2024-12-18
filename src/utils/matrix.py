@@ -8,4 +8,4 @@ class MatrixHookshot:
     def send_notification(self, message: str):
         requests.put(self.hookshot_url, json={
             "text": message
-        })
+        }).raise_for_status()
