@@ -51,3 +51,4 @@ jobs:
             --platform-versions 24.05 ${{ github.event_name == 'workflow_dispatch' && '--force' || '' }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          MATRIX_HOOKSHOT_URL: ${{ secrets.MATRIX_HOOKSHOT_URL }}

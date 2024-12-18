@@ -16,6 +16,10 @@ def main():
         github_access_token = os.environ["GH_TOKEN"]
     except KeyError:
         raise Exception("Missing `GH_TOKEN` environment variable.")
+    try:
+        matrix_hookshot_url = os.environ["MATRIX_HOOKSHOT_URL"]
+    except KeyError:
+        raise Exception("Missing `MATRIX_HOOKSHOT_URL` environment variable.")
 
     parser = argparse.ArgumentParser("nixpkgs updater for fc-nixos")
     parser.set_defaults(func="print_usage")
@@ -54,7 +58,7 @@ def main():
         "--force",
         help="Create new PR, even if no changes are detected",
         action=argparse.BooleanOptionalAction,
-        default=False
+        default=False,
     )
     parser_update.set_defaults(func=update_nixpkgs.update.run)
 
@@ -63,6 +67,11 @@ def main():
     )
     parser_cleanup.add_argument(
         "--merged-pr-id", help="merged fc-nixos PR ID", required=True
+    )
+    parser_cleanup.add_argument(
+        "--fc-nixos-dir",
+        help="Directory where the fc-nixos git checkout is in",
+        required=True,
     )
     parser_cleanup.add_argument(
         "--nixpkgs-dir",
@@ -85,6 +94,7 @@ def main():
     kwargs = dict(args._get_kwargs())
     del kwargs["func"]
     kwargs["github_access_token"] = github_access_token
+    kwargs["matrix_hookshot_url"] = matrix_hookshot_url
     func(**kwargs)
 
 
