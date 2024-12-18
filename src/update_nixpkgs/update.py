@@ -8,7 +8,6 @@ Workflow:
 * if new:
     * push to integration branch (nixpkgs-auto-update/fc-XX.XX-dev/YYYY-MM-DD)
     * update fc-nixos & create PR
-    * comment diff/changelog since last commit into PR
 On Merge (fc-nixos):
     * merge updated nixpkgs into nixos-XX.XX branch
     * delete old integration branches in nixpkgs and fc-nixos
@@ -35,7 +34,6 @@ from utils.matrix import MatrixHookshot
 NIXOS_VERSION_PATH = "release/nixos-version"
 PACKAGE_VERSIONS_PATH = "release/package-versions.json"
 VERSIONS_PATH = "release/versions.json"
-CHANGELOG_DIR = "changelog.d"
 
 
 @dataclass
@@ -196,24 +194,11 @@ def update_fc_nixos(
     check_output(["nix", "run", ".#buildVersionsJson"]).decode("utf-8")
     check_output(["nix", "run", ".#buildPackageVersionsJson"]).decode("utf-8")
 
-    changelog_path = (
-        Path(CHANGELOG_DIR)
-        / f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_nixpkgs-auto-update-{target_branch}.md"
-    )
-    changelog_path.write_text(
-        f"""
-### NixOS XX.XX platform
-
-- Update nixpkgs from {previous_hex_sha} to {new_hex_sha}
-"""
-    )
-
     repo.git.add(
         [
             "flake.lock",
             VERSIONS_PATH,
             PACKAGE_VERSIONS_PATH,
-            str(changelog_path),
         ]
     )
     repo.git.commit(message=f"Auto update nixpkgs to {new_hex_sha}")
