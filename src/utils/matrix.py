@@ -6,6 +6,6 @@ class MatrixHookshot:
         self.hookshot_url = hookshot_url
 
     def send_notification(self, message: str):
-        requests.put(self.hookshot_url, json={
-            "text": message
-        }).raise_for_status()
+        requests.put(
+            self.hookshot_url, json={"text": message}
+        ).raise_for_status()

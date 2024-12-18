@@ -51,7 +51,15 @@ def nixpkgs_repository(directory: str, remotes: dict[str, Remote]) -> Repo:
     return repo
 
 
-def check_nixpkgs_up_to_date(nixpkgs_repo: Repo, fc_nixos_dir: str,  fc_nixos_target_branch: str, nixpkgs_target_branch: str, integration_branch: str, fc_nixos_pr: PullRequest, matrix_hookshot: MatrixHookshot):
+def check_nixpkgs_up_to_date(
+    nixpkgs_repo: Repo,
+    fc_nixos_dir: str,
+    fc_nixos_target_branch: str,
+    nixpkgs_target_branch: str,
+    integration_branch: str,
+    fc_nixos_pr: PullRequest,
+    matrix_hookshot: MatrixHookshot,
+):
     fc_nixos_repo = Repo(fc_nixos_dir)
     versions_json_path = Path(fc_nixos_dir) / "release" / "versions.json"
 
@@ -65,17 +73,24 @@ def check_nixpkgs_up_to_date(nixpkgs_repo: Repo, fc_nixos_dir: str,  fc_nixos_ta
         versions = json.load(f)
     previous_versions_rev = versions["nixpkgs"]["rev"]
 
-    current_fc_nixos_commit = nixpkgs_repo.refs[f"origin/{nixpkgs_target_branch}"].commit
+    current_fc_nixos_commit = nixpkgs_repo.refs[
+        f"origin/{nixpkgs_target_branch}"
+    ].commit
     result = current_fc_nixos_commit.hexsha == previous_versions_rev
     if not result:
         notification = f"""ERROR Unable to promote nixpkgs daily integration branch `{integration_branch}` to `{nixpkgs_target_branch}`.
-Integration branch not up to date. Expected commit `{previous_versions_rev}` as HEAD commit of `flyingcircusio/nixpkgs/{nixpkgs_target_branch}`, but got `{current_fc_nixos_commit.hexsha}`. 
+Integration branch not up to date. Expected commit `{previous_versions_rev}` as HEAD commit of `flyingcircusio/nixpkgs/{nixpkgs_target_branch}`, but got `{current_fc_nixos_commit.hexsha}`.
 
 Please resolve manually by looking at the changes in nixpkgs between these commits, and then run [the GitHub Action](https://github.com/flyingcircusio/fc-nixos-release-tools/actions/workflows/update-nixpkgs.yaml) manually."""
         fc_nixos_pr.create_issue_comment(notification)
-        matrix_hookshot.send_notification(f"update-nixpkgs PR [#{fc_nixos_pr.number}](https://github.com/flyingcircusio/fc-nixos/pull/{fc_nixos_pr.number}): {notification}")
-        logging.info(f"Expected commit `{previous_versions_rev}` as HEAD commit of `flyingcircusio/nixpkgs/{nixpkgs_target_branch}`, but got `{current_fc_nixos_commit.hexsha}`")
+        matrix_hookshot.send_notification(
+            f"update-nixpkgs PR [#{fc_nixos_pr.number}](https://github.com/flyingcircusio/fc-nixos/pull/{fc_nixos_pr.number}): {notification}"
+        )
+        logging.info(
+            f"Expected commit `{previous_versions_rev}` as HEAD commit of `flyingcircusio/nixpkgs/{nixpkgs_target_branch}`, but got `{current_fc_nixos_commit.hexsha}`"
+        )
     return result
+
 
 def promote_nixpkgs(
     gh: Github, nixpkgs_repo: Repo, target_branch: str, integration_branch: str
@@ -103,7 +118,9 @@ def promote_nixpkgs(
     return True
 
 
-def cleanup_old_prs_and_branches(gh: Github, merged_integration_branch: str, platform_branch: str):
+def cleanup_old_prs_and_branches(
+    gh: Github, merged_integration_branch: str, platform_branch: str
+):
     info("Cleaning up old PRs and branches.")
     fc_nixos_repo = gh.get_repo(FC_NIXOS_REPO)
     nixpkgs_repo = gh.get_repo(NIXPKGS_REPO)
@@ -113,7 +130,9 @@ def cleanup_old_prs_and_branches(gh: Github, merged_integration_branch: str, pla
     # branches will be closed automatically by GitHub, when the branch is deleted
     for repo in [fc_nixos_repo, nixpkgs_repo]:
         for branch in repo.get_branches():
-            if not branch.name.startswith(f"nixpkgs-auto-update/{platform_branch}/"):
+            if not branch.name.startswith(
+                f"nixpkgs-auto-update/{platform_branch}/"
+            ):
                 continue
             branch_datestr = branch.name.split("/")[2]
             if (
@@ -129,7 +148,7 @@ def run(
     nixpkgs_dir: str,
     fc_nixos_dir: str,
     github_access_token: str,
-    matrix_hookshot_url: str
+    matrix_hookshot_url: str,
 ):
     gh = Github(auth=Auth.Token(github_access_token))
     fc_nixos_pr = gh.get_repo(FC_NIXOS_REPO).get_pull(int(merged_pr_id))
@@ -146,11 +165,25 @@ def run(
     }
 
     nixpkgs_repo = nixpkgs_repository(nixpkgs_dir, remotes)
-    if not check_nixpkgs_up_to_date(nixpkgs_repo, fc_nixos_dir, fc_nixos_pr.base.ref, nixpkgs_target_branch, integration_branch, fc_nixos_pr, matrix_hookshot):
-        logging.error("Abort promotion of nixpkgs branch. PR is not up to date.")
+    if not check_nixpkgs_up_to_date(
+        nixpkgs_repo,
+        fc_nixos_dir,
+        fc_nixos_pr.base.ref,
+        nixpkgs_target_branch,
+        integration_branch,
+        fc_nixos_pr,
+        matrix_hookshot,
+    ):
+        logging.error(
+            "Abort promotion of nixpkgs branch. PR is not up to date."
+        )
         return
-    if promote_nixpkgs(gh, nixpkgs_repo, nixpkgs_target_branch, integration_branch):
+    if promote_nixpkgs(
+        gh, nixpkgs_repo, nixpkgs_target_branch, integration_branch
+    ):
         fc_nixos_pr.create_issue_comment(
             f"Promoted this nixpkgs integration branch to the `{nixpkgs_target_branch}` branch successfully."
         )
-        cleanup_old_prs_and_branches(gh, integration_branch, fc_nixos_pr.base.ref)
+        cleanup_old_prs_and_branches(
+            gh, integration_branch, fc_nixos_pr.base.ref
+        )

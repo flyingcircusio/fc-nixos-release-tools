@@ -92,13 +92,15 @@ def rebase_nixpkgs(
     integration_branch: str,
     last_day_integration_branch: str,
     force: bool,
-        matrix_hookshot: MatrixHookshot
+    matrix_hookshot: MatrixHookshot,
 ) -> NixpkgsRebaseResult | None:
     logging.info("Trying to rebase nixpkgs repository.")
     if nixpkgs_repo.is_dirty():
         raise Exception("Repository is dirty!")
 
-    if not any(f"origin/{integration_branch}" == ref.name for ref in nixpkgs_repo.refs):
+    if not any(
+        f"origin/{integration_branch}" == ref.name for ref in nixpkgs_repo.refs
+    ):
         logging.info("Creating new integration branch")
         tracking_branch = nixpkgs_repo.create_head(
             integration_branch, f"origin/{branch_to_rebase}"
@@ -113,9 +115,12 @@ def rebase_nixpkgs(
         f"upstream/{branch_to_rebase}", "HEAD"
     )
 
-    if all(
-        latest_upstream.hexsha != commit.hexsha for commit in common_grounds
-    ) or force:
+    if (
+        all(
+            latest_upstream.hexsha != commit.hexsha for commit in common_grounds
+        )
+        or force
+    ):
         logging.info(
             f"Latest commit of {branch_to_rebase} is '{latest_upstream.hexsha}' which is not part of our fork, rebasing."
         )
@@ -124,7 +129,8 @@ def rebase_nixpkgs(
             nixpkgs_repo.git.rebase(f"upstream/{branch_to_rebase}")
         except GitCommandError:
             logging.exception("nixpkgs rebase failed")
-            matrix_hookshot.send_notification(f"""\
+            matrix_hookshot.send_notification(
+                f"""\
 update-nixpkgs: ERROR nixpkgs rebase failed for {branch_to_rebase}. Please resolve the conflict manually with the following commands:
 
 ```
@@ -135,7 +141,8 @@ git checkout -b {integration_branch} origin/{branch_to_rebase}
 git rebase upstream/{branch_to_rebase}
 git push origin {integration_branch}
 ```
-""")
+"""
+            )
             sys.exit(1)
 
         # Check if there are new commits compared to the last day's integration branch.
@@ -247,7 +254,7 @@ def run(
     nixpkgs_dir: str,
     force: bool,
     github_access_token: str,
-    matrix_hookshot_url: str
+    matrix_hookshot_url: str,
 ):
     matrix_hookshot = MatrixHookshot(matrix_hookshot_url)
     today = datetime.date.today().isoformat()
@@ -268,7 +275,11 @@ def run(
             "upstream": Remote(nixpkgs_upstream_url, [nixpkgs_target_branch]),
             "origin": Remote(
                 nixpkgs_origin_url,
-                [nixpkgs_target_branch, integration_branch, last_day_integration_branch],
+                [
+                    nixpkgs_target_branch,
+                    integration_branch,
+                    last_day_integration_branch,
+                ],
             ),
         }
         nixpkgs_repo = nixpkgs_repository(nixpkgs_dir, remotes)
@@ -278,7 +289,7 @@ def run(
             integration_branch,
             last_day_integration_branch,
             force,
-            matrix_hookshot
+            matrix_hookshot,
         ):
             logging.info(
                 f"Updated 'nixpkgs' to '{result.fork_after_rebase.hexsha}'"
