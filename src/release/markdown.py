@@ -28,8 +28,13 @@ class MarkdownTree:
     def __getitem__(self, item: str) -> Self:
         return self.subtrees.setdefault(item, MarkdownTree())
 
-    def __setitem__(self, key: str, value: Self) -> None:
-        self.subtrees[key] = value
+    def __setitem__(self, key: str, value: Self | list | str) -> None:
+        if isinstance(value, list):
+            self.subtrees[key].entries = value
+        elif isinstance(value, str):
+            self.subtrees[key].entries = [value]
+        else:
+            self.subtrees[key] = value
 
     def __iadd__(self, other: str) -> Self:
         self.entries.append(other)
@@ -50,12 +55,18 @@ class MarkdownTree:
         return MarkdownTree(entries, subtrees)
 
     @classmethod
+    def from_sections(cls, *sections: str):
+        r = cls()
+        for s in sections:
+            r[s] = cls()
+        return r
+
+    @classmethod
     def from_str(cls, text: str) -> Self:
         text = comment_re.sub("", text)
         subtrees = defaultdict(cls)
         section = section_re.search(text)
-        start = section.start() if section else -1
-        entries = entry_re.split(text[:start])
+        entries = entry_re.split(text[: section.start()] if section else text)
         entries = [e.strip() for e in entries if e.strip()]
         end = len(text)
         while section:

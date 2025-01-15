@@ -1,14 +1,47 @@
+import argparse
 import json
 import os
 import re
 import subprocess
 from pathlib import Path
+from typing import Any, Callable, Optional
+
+from rich import get_console
 
 EDITOR = os.environ.get("EDITOR", "nano")
 WORK_DIR = Path("work")
 FC_NIXOS = WORK_DIR / "fc-nixos"
 FC_DOCS = WORK_DIR / "doc"
 TEMP_CHANGELOG = WORK_DIR / "temp_changelog.md"
+
+
+def prompt(
+    prompt: str,
+    *,
+    default: Optional[Any] = None,
+    str_default: Optional[str] = None,
+    conv: Callable = str,
+):
+    if str_default is None and default is not None:
+        str_default = str(default)
+    if str_default is not None:
+        prompt += f" ([prompt.default]{str_default}[/prompt.default])"
+    prompt += ": "
+    while True:
+        i = get_console().input(prompt)
+        try:
+            if not i:
+                if default is not None:
+                    return default
+                elif str_default is not None:
+                    return conv(str_default)
+                else:
+                    continue
+            return conv(i)
+        except (ValueError, argparse.ArgumentTypeError) as e:
+            get_console().print(
+                str(e) or "Invalid value", style="prompt.invalid"
+            )
 
 
 def git(path: Path, *cmd: str, check=True, **kw):
@@ -55,9 +88,11 @@ def ensure_repo(path: Path, url: str, *fetch_args: str):
 
 
 def checkout(path: Path, branch: str, reset: bool = False, clean: bool = False):
-    git(path, "checkout", "-q", branch)
     if reset:
+        git(path, "checkout", "-q", "-f", branch)
         git(path, "reset", "-q", "--hard", f"origin/{branch}")
+    else:
+        git(path, "checkout", "-q", branch)
     if clean:
         git(path, "clean", "-d", "--force")
 

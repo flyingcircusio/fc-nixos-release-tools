@@ -1,15 +1,17 @@
 import argparse
+import datetime
+import logging
 import os
 import re
 from functools import partial
+from typing import Optional
 
-import requests
+from rich import print
+from rich.logging import RichHandler
 
-from release.markdown import MarkdownTree
-
-from . import add_branch, doc
+from . import branch, doc
 from .state import STAGE, State, load_state, new_state, store_state
-from .utils import FC_NIXOS, ensure_repo, git, machine_prefix
+from .utils import prompt
 
 AVAILABLE_CMDS = {
     STAGE.INIT: ["init", "status"],
@@ -22,7 +24,7 @@ AVAILABLE_CMDS = {
 def release_id_type(arg_value):
     if not re.compile("^[0-9]{4}_[0-9]{3}$").match(arg_value):
         raise argparse.ArgumentTypeError(
-            "invalid release id format. Expected: YYYY_NNN"
+            "Release ID must be formatted as YYYY_NNN"
         )
     return arg_value
 
@@ -32,7 +34,7 @@ def release_date_type(arg_value):
         raise argparse.ArgumentTypeError(
             "Release date must be formatted as YYYY-MM-DD"
         )
-    return arg_value
+    return datetime.date.fromisoformat(arg_value)
 
 
 def comma_separated_list(arg_value: str, choices=None):
@@ -45,87 +47,29 @@ def comma_separated_list(arg_value: str, choices=None):
     return separated
 
 
-def init(state: State, release_id: str, release_date: str):
+def init(
+    state: State,
+    release_id: Optional[str],
+    release_date: Optional[datetime.date],
+):
     state.clear()
     state.update(new_state())
+    if not release_date:
+        today = datetime.date.today()
+        # next monday
+        default = today + datetime.timedelta(days=8 - today.isoweekday())
+        release_date = prompt(
+            "Release date?", default=default, conv=release_date_type
+        )
+    if not release_id:
+        release_id = prompt(
+            "Release id?",
+            default=doc.next_release_id(release_date),
+            conv=release_id_type,
+        )
     state["release_id"] = release_id
-    state["release_date"] = release_date
+    state["release_date"] = release_date.isoformat()
     state["stage"] = STAGE.BRANCH
-    # TODO check if release_id already exists/suggest new one
-
-
-def test_branch(state: State, nixos_version: str):
-    if nixos_version not in state["branches"]:
-        print(f"Please add '{nixos_version}' before testing it")
-        return
-    branch_state = state["branches"][nixos_version]
-    if "tested" in branch_state:
-        print(f"'{nixos_version}' already tested")
-        return
-
-    changelog = MarkdownTree.from_str(branch_state.get("changelog", ""))
-    prod_commit = branch_state.get("new_production_commit", "<unknown rev>")
-    print(f"Production: hydra commit id correct? ({prod_commit}), build green?")
-    while not (hydra_id := input("Hydra eval ID: ")).isdigit():
-        pass
-    branch_state["hydra_eval_id"] = hydra_id
-    print(
-        f"Production: directory: create release '{state['release_id']}' for {nixos_version}-production using hydra eval ID {hydra_id}, valid from {state['release_date']} 21:00"
-    )
-    print(
-        "(releasetest VMs will already use this as the *next* release) [Enter to confirm]"
-    )
-    input()
-
-    metadata_url = f"https://my.flyingcircus.io/releases/metadata/fc-{nixos_version}-production/{state['release_id']}"
-    changelog["Detailed Changes"] += f"- [metadata]({metadata_url})"
-    try:
-        r = requests.get(metadata_url, timeout=5)
-        r.raise_for_status()
-        channel_url = r.json()["channel_url"]
-        changelog["Detailed Changes"] += f"- [channel url]({channel_url})"
-        print("Added channel url fragment")
-    except (requests.RequestException, KeyError):
-        print(
-            "Failed to retrieve channel url. Please add it manually in the next step"
-        )
-
-    if nixos_version == "21.05":
-        print(
-            "Production: switch a test VM to the 21.05-production-next channel. Is it working correctly?"
-        )
-    else:
-        prefix = machine_prefix(nixos_version)
-        print(
-            f"Production: On {prefix}prod00, switch to new system. Is it working correctly?"
-        )
-    print(
-        "Check switch output for unexpected service restarts, compare with changelog, impact properly documented? [Enter to edit]"
-    )
-    input()
-
-    changelog.open_in_editor()
-    branch_state["changelog"] = changelog.to_str()
-
-    branch_state["tested"] = True
-
-
-def tag(state: State):
-    ensure_repo(FC_NIXOS, "git@github.com:flyingcircusio/fc-nixos.git")
-    print(
-        "activate 'keep' for the Hydra job flyingcircus:fc-*-production:release [Enter]"
-    )
-    input()
-    for nixos_version in state["branches"].keys():
-        git(
-            FC_NIXOS,
-            "tag",
-            f"fc/r{state['release_id']}/{nixos_version}",
-            f"fc-{nixos_version}-production",
-        )
-
-    git(FC_NIXOS, "push", "--tags")
-    state["stage"] = STAGE.DONE
 
 
 def status(state: State, header: bool = True):
@@ -194,6 +138,12 @@ def status(state: State, header: bool = True):
 
 
 def main():
+    logging.basicConfig(
+        level="INFO",
+        format="%(message)s",
+        datefmt="[%X]",
+        handlers=[RichHandler()],
+    )
     os.environ["PAGER"] = ""
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -203,14 +153,13 @@ def main():
     init_parser = subparser.add_parser("init")
     init_parser.add_argument(
         "release_id",
+        nargs="?",
         type=release_id_type,
         help="Release id in the form YYYY_NNN",
     )
-    # default_release_date = datetime.date.today() + datetime.timedelta(days=1)
     init_parser.add_argument(
         "release_date",
-        # nargs="?",
-        # default=default_release_date.strftime("%Y-%m-%d"),
+        nargs="?",
         type=release_date_type,
         help="set planned roll-out date",
     )
@@ -226,25 +175,25 @@ def main():
     )
     add_branch_parser.add_argument(
         "--steps",
-        default=",".join(add_branch.STEPS),
+        default=",".join(branch.STEPS),
         nargs="?",
-        type=partial(comma_separated_list, choices=add_branch.STEPS),
+        type=partial(comma_separated_list, choices=branch.STEPS),
         help="Comma-separated list of steps to execute.",
     )
-    add_branch_parser.set_defaults(func=add_branch.main)
+    add_branch_parser.set_defaults(func=branch.add_branch)
 
     test_branch_parser = subparser.add_parser("test-branch")
     test_branch_parser.add_argument(
         "nixos_version",
         help="NixOS versions to test.",
     )
-    test_branch_parser.set_defaults(func=test_branch)
+    test_branch_parser.set_defaults(func=branch.test_branch)
 
     doc_parser = subparser.add_parser("doc")
     doc_parser.set_defaults(func=doc.main)
 
     tag_parser = subparser.add_parser("tag")
-    tag_parser.set_defaults(func=tag)
+    tag_parser.set_defaults(func=branch.tag_branch)
 
     args = parser.parse_args()
     if not hasattr(args, "func"):

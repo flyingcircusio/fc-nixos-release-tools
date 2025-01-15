@@ -20,6 +20,7 @@
             pypkgs.setuptools
             pypkgs.gitpython
             pypkgs.pygithub
+            pypkgs.rich
             pkgs.gh
           ];
         };

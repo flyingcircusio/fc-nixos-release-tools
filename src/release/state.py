@@ -1,13 +1,13 @@
 import json
 from collections import defaultdict
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import TypedDict
 
 STATE_FILE = Path("state.json")
 
 
-class STAGE(str, Enum):
+class STAGE(StrEnum):
     INIT = "init"
     BRANCH = "branch"
     TAG = "tag"

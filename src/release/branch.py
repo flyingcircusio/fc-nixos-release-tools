@@ -1,7 +1,11 @@
+import logging
 import subprocess
 
+import requests
+from rich import print
+
 from .markdown import MarkdownTree
-from .state import State
+from .state import STAGE, State
 from .utils import (
     FC_NIXOS,
     checkout,
@@ -10,6 +14,7 @@ from .utils import (
     git_stdout,
     load_json,
     machine_prefix,
+    prompt,
     rev_parse,
 )
 
@@ -57,8 +62,8 @@ def generate_nixpkgs_changelog(old_rev: str, new_rev: str) -> MarkdownTree:
                 + "".join("\n    - " + m for m in lines)
             )
     except subprocess.CalledProcessError:
-        print(
-            f"Could not find {pversions_path}. Continuing without package versions diff..."
+        logging.warning(
+            f"Could not find '{pversions_path}'. Continuing without package versions diff..."
         )
 
     versions_path = "release/versions.json"
@@ -72,8 +77,8 @@ def generate_nixpkgs_changelog(old_rev: str, new_rev: str) -> MarkdownTree:
                 "Detailed Changes"
             ] += f"- [nixpkgs/upstream changes](https://github.com/flyingcircusio/nixpkgs/compare/{old_nixpkgs_rev}...{new_nixpkgs_rev})"
     except subprocess.CalledProcessError:
-        print(
-            f"Could not find {versions_path} file. Continuing without nixpkgs changelog..."
+        logging.warning(
+            f"Could not find '{versions_path}' file. Continuing without nixpkgs changelog..."
         )
 
     return res
@@ -109,7 +114,7 @@ class Release:
                 self.branch_stag,
                 self.branch_prod,
             )
-            print(f"No changes for {self.nixos_version} detected")
+            logging.error(f"No changes for {self.nixos_version} detected")
             raise SystemExit(1)
         except subprocess.CalledProcessError as e:
             if e.returncode != 1:
@@ -188,7 +193,7 @@ class Release:
     def collect_changelog(self):
         checkout(FC_NIXOS, self.branch_stag)
         if not CHANGELOG.parent.exists():
-            print(
+            logging.warning(
                 f"Could not find '{str(CHANGELOG.parent)}'. Skipping changelog generation..."
             )
             return
@@ -196,10 +201,10 @@ class Release:
         new_fragment = MarkdownTree.collect(
             filter(CHANGELOG.__ne__, CHANGELOG.parent.rglob("*.md")), FC_NIXOS
         )
-        new_fragment.strip()
 
         self.branch_state["changelog"] = new_fragment.to_str()
 
+        new_fragment.strip()
         new_fragment.add_header(f"Release {self.release_id}")
         new_changelog = new_fragment.to_str()
         if CHANGELOG.exists():
@@ -210,7 +215,7 @@ class Release:
             git(FC_NIXOS, "add", str(CHANGELOG.relative_to(FC_NIXOS)))
             git(FC_NIXOS, "commit", "-m", "Collect changelog fragments")
         except subprocess.CalledProcessError:
-            print(
+            logging.error(
                 "Failed to commit Changelog. Commit it manually and continue after the `collect_changelog` stage"
             )
             raise
@@ -264,12 +269,85 @@ class Release:
         )
 
 
-def main(state: State, nixos_version: str, steps: list[str]):
+def add_branch(state: State, nixos_version: str, steps: list[str]):
     if nixos_version in state["branches"]:
-        print(f"Branch '{nixos_version}' already added")
+        logging.error(f"Branch '{nixos_version}' already added")
         return
     release = Release(state, nixos_version)
-    print(f"Adding {nixos_version} to {state['release_id']}")
+    logging.info(f"Adding {nixos_version} to {state['release_id']}")
     for step_name in steps:
-        print(f"\nRelease step: {step_name}")
+        logging.info(f"Release step: {step_name}")
         getattr(release, step_name)()
+
+
+def test_branch(state: State, nixos_version: str):
+    if nixos_version not in state["branches"]:
+        logging.error(f"Please add '{nixos_version}' before testing it")
+        return
+    branch_state = state["branches"][nixos_version]
+    if "tested" in branch_state:
+        logging.error(f"'{nixos_version}' already tested")
+        return
+
+    changelog = MarkdownTree.from_str(branch_state.get("changelog", ""))
+    prod_commit = branch_state.get("new_production_commit", "<unknown rev>")
+    print(f"Production: hydra commit id correct? ({prod_commit}), build green?")
+    hydra_id = str(prompt("Hydra eval ID", conv=int))
+    branch_state["hydra_eval_id"] = hydra_id
+    print(
+        f"Production: directory: create release '{state['release_id']}' for {nixos_version}-production using hydra eval ID {hydra_id}, valid from {state['release_date']} 21:00"
+    )
+    print(
+        "(releasetest VMs will already use this as the *next* release) [Enter to confirm]"
+    )
+    input()
+
+    metadata_url = f"https://my.flyingcircus.io/releases/metadata/fc-{nixos_version}-production/{state['release_id']}"
+    changelog["Detailed Changes"] += f"- [metadata]({metadata_url})"
+    try:
+        r = requests.get(metadata_url, timeout=5)
+        r.raise_for_status()
+        channel_url = r.json()["channel_url"]
+        changelog["Detailed Changes"] += f"- [channel url]({channel_url})"
+        logging.info("Added channel url fragment")
+    except (requests.RequestException, KeyError):
+        logging.warning(
+            "Failed to retrieve channel url. Please add it manually in the next step"
+        )
+
+    if nixos_version == "21.05":
+        print(
+            "Production: switch a test VM to the 21.05-production-next channel. Is it working correctly?"
+        )
+    else:
+        prefix = machine_prefix(nixos_version)
+        print(
+            f"Production: On {prefix}prod00, switch to new system. Is it working correctly?"
+        )
+    print(
+        "Check switch output for unexpected service restarts, compare with changelog, impact properly documented? [Enter to edit]"
+    )
+    input()
+
+    changelog.open_in_editor()
+    branch_state["changelog"] = changelog.to_str()
+
+    branch_state["tested"] = True
+
+
+def tag_branch(state: State):
+    ensure_repo(FC_NIXOS, "git@github.com:flyingcircusio/fc-nixos.git")
+    print(
+        "activate 'keep' for the Hydra job flyingcircus:fc-*-production:release [Enter]"
+    )
+    input()
+    for nixos_version in state["branches"].keys():
+        git(
+            FC_NIXOS,
+            "tag",
+            f"fc/r{state['release_id']}/{nixos_version}",
+            f"fc-{nixos_version}-production",
+        )
+
+    git(FC_NIXOS, "push", "--tags")
+    state["stage"] = STAGE.DONE

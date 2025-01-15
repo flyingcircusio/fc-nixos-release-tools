@@ -22,7 +22,7 @@ Each command is atomic and can be interrupted.
 
 Example usage:
 ```bash
-release init 2024_123 2024-12-01
+release init
 release add-branch 23.11
 release add-branch 24.05
 release test-branch 23.11
