@@ -3,7 +3,7 @@ name: auto-merge
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: "5 12-23 * * MON-FRI"
+    - cron: "5 10-21 * * 1-5"
 
 jobs:
   run-auto-merge:
