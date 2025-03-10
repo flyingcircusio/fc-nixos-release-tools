@@ -80,9 +80,9 @@ def check_monitoring_review_status(
                 matrix_hookshot.send_notification(
                     "fc-nixos auto-merge: Platform monitoring review is not done yet today. Not merging staging nor any PRs."
                 )
-                return False
+            return False
 
-        if monitoring_review["has_platform_release_blocker"]:
+        if monitoring_review["has_platform_release_blocker"] is True:
             logging.warning(
                 "Platform monitoring review is not done yet or has release blocker. Not merging!"
             )
