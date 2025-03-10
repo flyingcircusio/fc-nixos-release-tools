@@ -38,6 +38,7 @@ jobs:
           MATRIX_HOOKSHOT_URL: ${{ secrets.MATRIX_HOOKSHOT_URL }}
           MONITORING_REVIEW_URL: ${{ secrets.MONITORING_REVIEW_URL }}
       - uses: actions/upload-artifact@v4
+        if: success() || failure()
         with:
           name: status-json
           path: auto-merge-status.json
