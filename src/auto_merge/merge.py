@@ -33,7 +33,14 @@ def merge_prs(config: Config, gh: Github, github_access_token: str):
         merge_date = utils.calculate_merge_date(risk, urgency, config)
         if merge_date == today:
             logging.info(f"Merging PR {pr.number}.")
-            pr.merge(delete_branch=True)
+            pr.merge()
+            try:
+                repo.get_git_ref(f"heads/{pr.head.ref}").delete()
+            except Exception as e:
+                logging.info(
+                    f"Deleting branch of PR {pr.number} didn't work. Probably it was deleted automatically.",
+                    exc_info=e,
+                )
 
 
 def fc_nixos_repository(directory: str, url: str) -> Repo:
