@@ -159,7 +159,7 @@ def check_pr_mergeable(
             "gh",
             "pr",
             "checks",
-            pr.number,
+            str(pr.number),
             "--json",
             "bucket,name",
             "-R",
