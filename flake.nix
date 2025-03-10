@@ -16,9 +16,17 @@
           src = ./.;
           pyproject = true;
           build-system = [ pypkgs.setuptools-scm ];
+          nativeCheckInputs = [
+            pypkgs.pytestCheckHook
+          ];
           dependencies = [
+            pypkgs.python-dateutil
+            pypkgs.gql
+            pypkgs.gql.optional-dependencies.requests
+            pypkgs.pydantic
             pypkgs.setuptools
             pypkgs.gitpython
+            pypkgs.requests
             pypkgs.pygithub
             pypkgs.rich
             pkgs.gh

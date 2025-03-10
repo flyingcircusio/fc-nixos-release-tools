@@ -1,0 +1,35 @@
+[general]
+# 0 = Monday, 6 = Sunday
+production_merge_day = 3
+# Times are in Europe/Berlin
+platform_versions = ["24.05"]
+fc_nixos_repo_name = "flyingcircusio/fc-nixos-testing"
+
+[monitoring_review]
+# Names of monitoring review columns
+names = ["platform-dev", "platform-release"]
+notification_cutoff_hour = 15
+
+# Weekdays relative to the production_merge_day
+# 0 = production_merge_day, 1 = production_merge_day + 1
+# e.g. production_merge_day = Thursday. pr_merge_days.0 = THU, pr_merge_days.1=FRI, pr_merge_days.2=MON
+[pr_merge_days]
+[pr_merge_days.0]
+max_risk = 5
+min_urgency = 1
+
+[pr_merge_days.1]
+max_risk = 4
+min_urgency = 1
+
+[pr_merge_days.2]
+max_risk = 3
+min_urgency = 2
+
+[pr_merge_days.3]
+max_risk = 2
+min_urgency = 3
+
+[pr_merge_days.4]
+max_risk = 1
+min_urgency = 5
