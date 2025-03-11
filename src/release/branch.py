@@ -103,10 +103,9 @@ class Release:
         checkout(FC_NIXOS, self.branch_stag, reset=True, clean=True)
         checkout(FC_NIXOS, self.branch_prod, reset=True, clean=True)
 
-        if "orig_staging_commit" not in self.branch_state:
-            self.branch_state["orig_staging_commit"] = rev_parse(
-                FC_NIXOS, self.branch_stag
-            )
+        self.branch_state["orig_staging_commit"] = rev_parse(
+            FC_NIXOS, self.branch_stag
+        )
 
     def skip_no_change(self):
         try:
