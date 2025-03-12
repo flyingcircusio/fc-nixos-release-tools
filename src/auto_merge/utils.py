@@ -176,7 +176,7 @@ def check_pr_mergeable(
             continue
         if workflow_run["bucket"] != "pass":
             logging.info(
-                f"Workflow run {workflow_run['name']} is unsuccessful. Not mergeable."
+                f"PR {pr.number} has unsuccessful workflow run {workflow_run['name']} (state {workflow_run['bucket']}. Not mergeable."
             )
             return False
     return True

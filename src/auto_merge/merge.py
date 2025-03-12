@@ -146,6 +146,10 @@ def run(
         if not check_monitoring_review_status(
             config, monitoring_review_url, matrix_hookshot
         ):
+            # Write auto-merge-status.json that gets uploaded by GHA
+            (Path.cwd() / "auto-merge-status.json").write_text(
+                json.dumps(status)
+            )
             return
         if (
             datetime.date.today().weekday()
