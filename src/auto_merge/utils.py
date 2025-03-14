@@ -104,7 +104,9 @@ def check_pr_mergeable(
     repo: Repository, pr: PullRequest, token: str, config: Config
 ) -> bool:
     if not pr.mergeable:
-        logging.info(f"PR {pr.number} has conflicts. Not mergeable.")
+        logging.info(
+            f"PR {pr.number} has conflicts (state {pr.mergeable_state}). Not mergeable."
+        )
         return False
 
     if pr.draft:
@@ -176,7 +178,7 @@ def check_pr_mergeable(
             continue
         if workflow_run["bucket"] != "pass":
             logging.info(
-                f"PR {pr.number} has unsuccessful workflow run {workflow_run['name']} (state {workflow_run['bucket']}. Not mergeable."
+                f"PR {pr.number} has unsuccessful workflow run {workflow_run['name']} (state {workflow_run['bucket']}). Not mergeable."
             )
             return False
     return True
