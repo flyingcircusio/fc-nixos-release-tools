@@ -49,8 +49,8 @@ def main():
         required=True,
     )
     parser_update.add_argument(
-        "--platform-versions",
-        help="Platform versions",
+        "--versions",
+        help="Syntax: platform version:upstream branch space-seperated, e.g. 24.11:nixos-24.11 25.05:nixos-unstable",
         required=True,
         nargs="+",
     )

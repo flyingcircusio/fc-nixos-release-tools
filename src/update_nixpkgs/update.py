@@ -15,6 +15,7 @@ On Merge (fc-nixos):
 Manual merges work by pushing manually in the nixpkgs integration branch and running the GHA manually.
 
 """
+
 import datetime
 import logging
 import os
@@ -247,7 +248,7 @@ When manual changes are required: Push to the nixpkgs update branch, and run [th
 
 
 def run(
-    platform_versions: list[str],
+    versions: list[str],
     nixpkgs_upstream_url: str,
     nixpkgs_origin_url: str,
     fc_nixos_dir: str,
@@ -260,9 +261,9 @@ def run(
     today = datetime.date.today().isoformat()
     yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
 
-    for platform_version in platform_versions:
+    for version in versions:
+        platform_version, nixpkgs_target_branch = version.split(":")
         logging.info(f"Updating platform {platform_version}")
-        nixpkgs_target_branch = f"nixos-{platform_version}"
         fc_nixos_target_branch = f"fc-{platform_version}-dev"
         integration_branch = (
             f"nixpkgs-auto-update/{fc_nixos_target_branch}/{today}"
