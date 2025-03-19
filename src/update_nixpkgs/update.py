@@ -228,23 +228,28 @@ def create_fc_nixos_pr(
     # If there is an open PR for this integration branch, don't create a new one.
     # if fc_nixos_repo.get_pulls(base=target_branch,head=f"flyingcircusio:{integration_branch}", state="open").totalCount > 0:
     #     return
-    fc_nixos_repo.create_pull(
-        base=target_branch,
-        head=integration_branch,
-        title=f"[{platform_version}] Automated nixpkgs update {now}",
-        body=f"""\
-@flyingcircusio/release-managers
+    try:
+        fc_nixos_repo.create_pull(
+            base=target_branch,
+            head=integration_branch,
+            title=f"[{platform_version}] Automated nixpkgs update {now}",
+            body=f"""\
+    @flyingcircusio/release-managers
 
-View nixpkgs update branch: [{integration_branch}](https://github.com/{NIXPKGS_REPO}/tree/{integration_branch})
+    View nixpkgs update branch: [{integration_branch}](https://github.com/{NIXPKGS_REPO}/tree/{integration_branch})
 
-Review Checklist:
+    Review Checklist:
 
-- [ ] Hydra is green
-- [ ] Package update versions look reasonable
+    - [ ] Hydra is green
+    - [ ] Package update versions look reasonable
 
-When manual changes are required: Push to the nixpkgs update branch, and run [the GitHub Action](https://github.com/flyingcircusio/fc-nixos-release-tools/actions/workflows/update-nixpkgs.yaml) manually.
-""",
-    )
+    When manual changes are required: Push to the nixpkgs update branch, and run [the GitHub Action](https://github.com/flyingcircusio/fc-nixos-release-tools/actions/workflows/update-nixpkgs.yaml) manually.
+    """,
+        )
+    except Exception:
+        logging.exception(
+            f"Creating pull request for `{platform_version}` failed."
+        )
 
 
 def run(
