@@ -48,7 +48,7 @@ jobs:
             --nixpkgs-dir nixpkgs \
             --nixpkgs-upstream-url https://github.com/NixOS/nixpkgs \
             --nixpkgs-origin-url https://x-access-token:${{steps.app-token.outputs.token}}@github.com/flyingcircusio/nixpkgs.git \
-            --platform-versions 24.11 ${{ github.event_name == 'workflow_dispatch' && '--force' || '' }}
+            --platform-versions 24.11 25.05 ${{ github.event_name == 'workflow_dispatch' && '--force' || '' }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           MATRIX_HOOKSHOT_URL: ${{ secrets.MATRIX_HOOKSHOT_URL }}
