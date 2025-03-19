@@ -151,16 +151,8 @@ def run(
                 json.dumps(status)
             )
             return
-        if (
-            datetime.date.today().weekday()
-            == config.general.production_merge_day
-        ):
-            logging.info(
-                "Today is production merge. Not merging dev into staging."
-            )
-        else:
-            fc_nixos_repo = fc_nixos_repository(fc_nixos_dir, fc_nixos_url)
-            merge_staging(fc_nixos_repo, config)
+        fc_nixos_repo = fc_nixos_repository(fc_nixos_dir, fc_nixos_url)
+        merge_staging(fc_nixos_repo, config)
         status["last_staging_merge"] = datetime.datetime.now().isoformat()
 
     # Write auto-merge-status.json that gets uploaded by GHA
