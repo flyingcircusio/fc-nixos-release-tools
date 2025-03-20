@@ -20,7 +20,7 @@ from .utils import (
 
 STEPS = [
     "prepare",
-    "diff_release",
+    "review_pending_commits",
     "check_hydra",
     "collect_changelog",
     "merge",
@@ -124,41 +124,16 @@ class Release:
     def register(self):
         self.state["branches"][self.nixos_version] = self.branch_state
 
-    def diff_release(self):
-        def cherry(upstream: str, head: str):
-            res = git(FC_NIXOS, "cherry", upstream, head, "-v")
-            print(
-                f"Commits in {head}, not in {upstream} ({len(res.splitlines())}):"
-            )
-            print()
-            print(f"git cherry '{upstream}' '{head}' -v")
-            print(res)
-            print()
-
-        dev_rev = rev_parse(FC_NIXOS, self.branch_dev)
-        stag_rev = rev_parse(FC_NIXOS, self.branch_stag)
-        prod_rev = rev_parse(FC_NIXOS, self.branch_prod)
-
-        print(
-            f"Comparing {self.branch_dev} to {self.branch_prod} {prod_rev}..{dev_rev}"
-        )
-        print(f"{self.branch_stag} is at {stag_rev}")
-
-        print("")
-        print("Merged PRs:")
+    def review_pending_commits(self):
+        print("[bold white]Review commits in this release")
         print()
-        print(f"gh pr list --state=merged -B '{self.branch_dev}'")
-        try:
-            subprocess.run(
-                ["gh", "pr", "list", "--state=merged", "-B", self.branch_dev],
-                cwd=FC_NIXOS,
-            )
-        except FileNotFoundError:
-            print("'gh' is not available. Please check merged PRs manually")
+        print(git(FC_NIXOS, "cherry", self.branch_prod, self.branch_stag, "-v"))
         print()
 
-        cherry(self.branch_stag, self.branch_dev)
-        cherry(self.branch_prod, self.branch_dev)
+        while not Confirm.ask(
+            "Have you spot-checked the PRs and commits that they seem generally fine?"
+        ):
+            pass
 
     def check_hydra(self):
         orig_stag_rev = self.branch_state.get(
@@ -259,6 +234,7 @@ class Release:
         self.branch_state["changelog"] = new_fragment.to_str()
 
     def push(self):
+
         print(f"Committed changes ({self.nixos_version}):")
         print("fc-nixos:")
         git(FC_NIXOS, "log", "--graph", "--decorate", "--format=short", "-n3")
