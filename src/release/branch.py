@@ -14,8 +14,8 @@ from .utils import (
     git,
     load_json,
     machine_prefix,
-    prompt,
     rev_parse,
+    wait_for_successful_hydra_release_build,
 )
 
 STEPS = [
@@ -176,12 +176,32 @@ class Release:
             "orig_staging_commit", "<unknown rev>"
         )
         prefix = machine_prefix(self.nixos_version)
-        print(
-            f"Staging: hydra commit id correct ({orig_stag_rev}), build green, does {prefix}stag00 build it? [Enter to confirm]"
+        build = wait_for_successful_hydra_release_build(
+            self.branch_stag, orig_stag_rev
         )
-        input()
+        print("Staging: Hydra release build is successful")
+        print(f"Staging: Checking that {prefix}stag00 switched successfully")
+        remote_nix_name = (
+            subprocess.check_output(
+                [
+                    "ssh",
+                    f"{prefix}stag00",
+                    "cat",
+                    "/run/current-system/nixos-version",
+                ]
+            )
+            .decode("utf-8")
+            .strip()
+        )
+        if remote_nix_name != build.nix_name:
+            print(
+                f"Staging: {prefix}stag00 has not yet switched to the new release (nixname {build.nix_name}). Switch manually. [Enter to confirm]"
+            )
+            input()
+        else:
+            print(f"Staging: {prefix}stag00 switched successfully")
         print(
-            f"Staging: releasetest sensu checks green? Look at https://sensu.rzob.gocept.net/#/clients?q={prefix}* [Enter to confirm]"
+            f"Staging: releasetest sensu checks green? Look at https://sensu.rzob.gocept.net/#/clients?q={prefix} [Enter to confirm]"
         )
         input()
 
@@ -297,11 +317,12 @@ def test_branch(state: State, nixos_version: str):
 
     changelog = MarkdownTree.from_str(branch_state.get("changelog", ""))
     prod_commit = branch_state.get("new_production_commit", "<unknown rev>")
-    print(f"Production: hydra commit id correct? ({prod_commit}), build green?")
-    hydra_id = str(prompt("Hydra eval ID", conv=int))
-    branch_state["hydra_eval_id"] = hydra_id
+    build = wait_for_successful_hydra_release_build(
+        f"fc-{nixos_version}-production", prod_commit
+    )
+    branch_state["hydra_eval_id"] = build.eval_id
     print(
-        f"Production: directory: create release '{state['release_id']}' for {nixos_version}-production using hydra eval ID {hydra_id}, valid from {state['release_date']} 21:00"
+        f"Production: directory: create release '{state['release_id']}' for {nixos_version}-production using hydra eval ID {build.eval_id}, valid from {state['release_date']} 21:00"
     )
     print(
         "(releasetest VMs will already use this as the *next* release) [Enter to confirm]"
