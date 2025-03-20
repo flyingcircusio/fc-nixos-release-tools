@@ -123,9 +123,9 @@ def iter_hydra(url: str, item_key: str):
         j = r.json()
         for item in j[item_key]:
             yield item
-        if "last" not in j or page == j["last"]:
+        page = j.get("next")
+        if not page:
             break
-        page = j["next"]
 
 
 def get_hydra_eval_id_for_commit(branch: str, commit_hash: str):
