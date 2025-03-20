@@ -165,7 +165,9 @@ def start(
     print(CHECKLIST_FOOTER.format(release_date=release_date.isoformat()))
     print("[purple]" + "=" * 80 + "[/purple]")
 
-    while not Confirm("Have you copied the checklist to the release issue?"):
+    while not Confirm.ask(
+        "Have you copied the checklist to the release issue?"
+    ):
         pass
 
 
