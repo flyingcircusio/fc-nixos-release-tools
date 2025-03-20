@@ -15,6 +15,7 @@ from .utils import (
     load_json,
     machine_prefix,
     rev_parse,
+    run_maintenance_switch_on_vm,
     wait_for_successful_hydra_release_build,
 )
 
@@ -159,11 +160,9 @@ class Release:
         )
         if remote_nix_name != build.nix_name:
             print(
-                f"Staging: {prefix}stag00 has not yet switched to the new release (nixname {build.nix_name}). Switch manually. [Enter to confirm]"
+                f"Staging: {prefix}stag00 has not yet switched to the new release. Switching it now."
             )
-            input()
-        else:
-            print(f"Staging: {prefix}stag00 switched successfully")
+            run_maintenance_switch_on_vm(f"{prefix}stag00")
         print(
             f"Staging: releasetest sensu checks green? Look at https://sensu.rzob.gocept.net/#/clients?q={prefix} [Enter to confirm]"
         )
@@ -308,11 +307,10 @@ def release_production(state: State, nixos_version: str):
         )
 
     prefix = machine_prefix(nixos_version)
+    print(f"Production: Switching {prefix}prod00 to a new system.")
+    run_maintenance_switch_on_vm(f"{prefix}prod00")
     print(
-        f"Production: On {prefix}prod00, switch to new system. Is it working correctly?"
-    )
-    print(
-        "Check switch output for unexpected service restarts, compare with changelog, impact properly documented? [Enter to edit]"
+        "Check maintenance log, check switch output for unexpected service restarts, compare with changelog, impact properly documented? [Enter to edit]"
     )
     input()
 

@@ -196,3 +196,33 @@ def wait_for_successful_hydra_release_build(
                 f"[red]Hydra release build for {branch} and commit {commit_hash} is unsuccessful"
             )
             raise RuntimeError("Hydra release build is unsuccessful")
+
+
+def run_maintenance_switch_on_vm(vm_name: str):
+    with Progress(transient=True) as progress:
+        task = progress.add_task("", total=None)
+        cmds = [
+            "sudo fc-manage update-enc",
+            "sudo systemctl start fc-update-channel.service",
+            "sudo fc-maintenance run --run-all-now",
+        ]
+        progress.update(task, total=len(cmds))
+        for cmd in cmds:
+            progress.update(
+                task,
+                description=f"{vm_name}: {cmd}",
+            )
+            try:
+                subprocess.run(
+                    ["ssh", vm_name] + cmd.split(" "),
+                    check=True,
+                    capture_output=True,
+                )
+            except subprocess.CalledProcessError as e:
+                print(
+                    f"Staging: [red]Switching {vm_name} failed with code {e.returncode}!",
+                )
+                print("STDOUT:", e.stdout.decode("utf-8"))
+                print("STDERR:", e.stderr.decode("utf-8"))
+                return
+            progress.update(task, advance=1)
