@@ -160,16 +160,6 @@ class Release:
         cherry(self.branch_stag, self.branch_dev)
         cherry(self.branch_prod, self.branch_dev)
 
-        print(f"git diff '{self.branch_prod}' '{self.branch_dev}'")
-        print("Press Enter to show full diff")
-
-        input()
-
-        git(FC_NIXOS, "diff", self.branch_prod, self.branch_dev)
-
-        print("Press enter to continue")
-        input()
-
     def check_hydra(self):
         orig_stag_rev = self.branch_state.get(
             "orig_staging_commit", "<unknown rev>"
