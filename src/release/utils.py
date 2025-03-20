@@ -164,24 +164,29 @@ def wait_for_successful_hydra_release_build(
             f"[yellow]Waiting for hydra eval in {branch} with commit {commit_hash} to be created...",
             total=None,
         )
-        print("Check hydra evals: " + HYDRA_EVALS_URL.format(branch=branch))
-
+        print(
+            "    > You can manually check for Hydra evals here: "
+            + HYDRA_EVALS_URL.format(branch=branch)
+        )
+        print()
         while not progress.finished:
             eval_id = get_hydra_eval_id_for_commit(branch, commit_hash)
             if eval_id is None:
                 time.sleep(10)
                 continue
-            print(f"Staging new eval id: {eval_id}")
+            print(f"Found matching Hydra eval ID: {eval_id}")
             progress.update(task, total=1, advance=1)
 
+    print()
     with Progress(transient=True) as progress:
         task = progress.add_task(
             "[yellow]Waiting for hydra release build to finish...", total=None
         )
         print(
-            "Check hydra release build for status: "
+            "    > You can manually check Hydra build status here: "
             + HYDRA_RELEASE_BUILD_URL.format(eval_id=eval_id)
         )
+        print()
         while not progress.finished:
             build = get_hydra_release_build(eval_id)
             if build["finished"] != 1:
