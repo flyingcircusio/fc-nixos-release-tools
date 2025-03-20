@@ -22,8 +22,8 @@ N_A = "[i]n/a[/i]"
 
 AVAILABLE_CMDS = {
     STAGE.START: ["start", "status"],
-    STAGE.BRANCH: ["merge-production", "release-production", "doc", "status"],
-    STAGE.TAG: ["tag", "merge-production", "status"],
+    STAGE.MERGE: ["merge-production", "release-production", "doc", "status"],
+    STAGE.TAG: ["tag", "status"],
     STAGE.DONE: ["start", "status"],
 }
 
@@ -118,7 +118,7 @@ def start(
         )
     state["release_id"] = release_id
     state["release_date"] = release_date.isoformat()
-    state["stage"] = STAGE.BRANCH
+    state["stage"] = STAGE.MERGE
 
     # Gather releases with changes
     print()

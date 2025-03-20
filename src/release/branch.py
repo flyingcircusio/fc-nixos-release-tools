@@ -1,14 +1,18 @@
 import logging
+import socket
 import subprocess
 
 import requests
 from rich import print
+from rich.markdown import Markdown
+from rich.progress import Progress
 from rich.prompt import Confirm
 
 from .markdown import MarkdownTree
 from .state import STAGE, State
 from .utils import (
     FC_NIXOS,
+    HydraReleaseBuild,
     checkout,
     ensure_repo,
     git,
@@ -16,6 +20,7 @@ from .utils import (
     machine_prefix,
     rev_parse,
     run_maintenance_switch_on_vm,
+    verify_machines_are_current,
     wait_for_successful_hydra_release_build,
 )
 
@@ -23,6 +28,7 @@ STEPS = [
     "prepare",
     "review_pending_commits",
     "check_hydra",
+    "check_releasetest_machines",
     "collect_changelog",
     "merge",
     "backmerge",
@@ -126,47 +132,40 @@ class Release:
         self.state["branches"][self.nixos_version] = self.branch_state
 
     def review_pending_commits(self):
-        print("[bold white]Review commits in this release")
+        print()
+        print("[bold white]Review commits[/bold white]")
         print()
         print(git(FC_NIXOS, "cherry", self.branch_prod, self.branch_stag, "-v"))
         print()
 
         while not Confirm.ask(
-            "Have you spot-checked the PRs and commits that they seem generally fine?"
+            "Have you spot-checked the commits for general sanity?"
         ):
             pass
 
     def check_hydra(self):
-        orig_stag_rev = self.branch_state.get(
-            "orig_staging_commit", "<unknown rev>"
+        print()
+        print(
+            f"[bold white]Verifying clean Hydra build for [green]{self.branch_stag}[/green][/bold white]"
         )
-        prefix = machine_prefix(self.nixos_version)
-        build = wait_for_successful_hydra_release_build(
+        print()
+        orig_stag_rev = self.branch_state.get("orig_staging_commit")
+        self.build = wait_for_successful_hydra_release_build(
             self.branch_stag, orig_stag_rev
         )
-        print("Staging: Hydra release build is successful")
-        print(f"Staging: Checking that {prefix}stag00 switched successfully")
-        remote_nix_name = (
-            subprocess.check_output(
-                [
-                    "ssh",
-                    f"{prefix}stag00",
-                    "cat",
-                    "/run/current-system/nixos-version",
-                ]
-            )
-            .decode("utf-8")
-            .strip()
-        )
-        if remote_nix_name != build.nix_name:
-            print(
-                f"Staging: {prefix}stag00 has not yet switched to the new release. Switching it now."
-            )
-            run_maintenance_switch_on_vm(f"{prefix}stag00")
+        print("Hydra has a [green]successful[/green] build.")
+
+    def check_releasetest_machines(self):
+        prefix = machine_prefix(self.nixos_version)
+        verify_machines_are_current(f"{prefix}stag", self.build.nix_name)
+
+    def check_sensu(self):
+        prefix = machine_prefix(self.nixos_version)
         print(
             f"Staging: releasetest sensu checks green? Look at https://sensu.rzob.gocept.net/#/clients?q={prefix} [Enter to confirm]"
         )
-        input()
+        while not Confirm.ask("Is sensu green?"):
+            pass
 
     def collect_changelog(self):
         checkout(FC_NIXOS, self.branch_stag)
@@ -227,21 +226,24 @@ class Release:
         )
         new_fragment |= generate_nixpkgs_changelog(old_rev, new_rev)
 
-        print("Press enter to edit the generated changelog fragment")
-        input()
-        new_fragment.open_in_editor()
+        print(Markdown(new_fragment))
+
+        while (
+            Confirm.choice(
+                "Do you want to [green]edit[/green] the fragment or [green]continue[/green]?",
+                choices=["edit", "continue"],
+            )
+            == "edit"
+        ):
+            new_fragment.open_in_editor()
+            print(Markdown(new_fragment))
+
         self.branch_state["changelog"] = new_fragment.to_str()
 
     def push(self):
+        remote = git(FC_NIXOS, "remote", "get-url", "--push", "origin")
+        print(f"[bold white]Pushing changes to [green]{remote}[/green] ...")
 
-        print(f"Committed changes ({self.nixos_version}):")
-        print("fc-nixos:")
-        git(FC_NIXOS, "log", "--graph", "--decorate", "--format=short", "-n3")
-        print()
-        print(
-            "If this looks correct, press Enter to push (or use ^C to abort)."
-        )
-        input()
         git(
             FC_NIXOS,
             "push",
@@ -253,20 +255,16 @@ class Release:
 
 
 def merge_production(state: State, nixos_version: str, steps: list[str]):
-    if nixos_version in state["branches"] or state["stage"] != STAGE.BRANCH:
-        logging.warning(
-            f"Branch '{nixos_version}' already added or no longer in 'branch' stage"
-        )
+    if state["branches"][nixos_version].get("new_production_commit"):
+        print("[red]This version has already been merged.[/red]")
         if not Confirm.ask(
-            "Do you want to (re-)add this branch? "
-            "(This will reset the stage back to 'branch' and may result in duplicate changelog entries)"
+            "Do you want to merge this branch again? "
+            "[red](This will reset the stage back to 'merge' and may result in duplicate changelog entries)[/red]"
         ):
             return
-        state["stage"] = STAGE.BRANCH
+        state["stage"] = STAGE.MERGE
     release = Release(state, nixos_version)
-    logging.info(f"Adding {nixos_version} to {state['release_id']}")
     for step_name in steps:
-        logging.info(f"Release step: {step_name}")
         getattr(release, step_name)()
 
 
@@ -280,7 +278,7 @@ def release_production(state: State, nixos_version: str):
         return
 
     changelog = MarkdownTree.from_str(branch_state.get("changelog", ""))
-    prod_commit = branch_state.get("new_production_commit", "<unknown rev>")
+    prod_commit = branch_state["new_production_commit"]
     build = wait_for_successful_hydra_release_build(
         f"fc-{nixos_version}-production", prod_commit
     )
@@ -307,12 +305,13 @@ def release_production(state: State, nixos_version: str):
         )
 
     prefix = machine_prefix(nixos_version)
-    print(f"Production: Switching {prefix}prod00 to a new system.")
-    run_maintenance_switch_on_vm(f"{prefix}prod00")
+    verify_machines_are_current(f"{prefix}prod", build.nix_name)
+
     print(
         "Check maintenance log, check switch output for unexpected service restarts, compare with changelog, impact properly documented? [Enter to edit]"
     )
-    input()
+    while not Confirm.ask("Ready to continue?"):
+        pass
 
     changelog.open_in_editor()
     branch_state["changelog"] = changelog.to_str()

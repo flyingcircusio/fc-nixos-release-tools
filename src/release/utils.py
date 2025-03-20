@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import re
+import socket
 import subprocess
 import time
 from dataclasses import dataclass
@@ -198,6 +199,68 @@ def wait_for_successful_hydra_release_build(
             raise RuntimeError("Hydra release build is unsuccessful")
 
 
+def verify_machines_are_current(prefix, nix_name):
+    print()
+    print("[bold white]Verifying test machines[/bold white]")
+    print()
+    print(
+        f"    > Expecting the system's nix_name to be [bold white]{nix_name}[/bold white]"
+    )
+    print()
+
+    known_machines = list()
+    with Progress(transient=True) as progress:
+        task = progress.add_task(
+            "Scanning for known release test machines ...", total=100
+        )
+        for i in range(100):
+            machine = f"{prefix}{i:02d}"
+            progress.update(task, description=f"Checking {machine}")
+            try:
+                socket.getaddrinfo(machine, 80)
+                known_machines.append(machine)
+                print(
+                    f"    > Found machine [bold white]{machine}[/bold white]."
+                )
+            except socket.gaierror:
+                pass
+            progress.update(task, advance=1)
+
+    if not known_machines:
+        raise RuntimeError(
+            "Could not find any test machines. Please check your network."
+        )
+
+    print()
+
+    for machine in known_machines:
+        print(
+            f"Validating whether [bold white]{machine}[/bold white] has switched successfully ..."
+        )
+        remote_nix_name = (
+            subprocess.check_output(
+                [
+                    "ssh",
+                    machine,
+                    "cat",
+                    "/run/current-system/nixos-version",
+                ]
+            )
+            .decode("utf-8")
+            .strip()
+        )
+        if remote_nix_name != nix_name:
+            print(
+                f"{machine} has [red]not yet switched to the new release[/red] (nixname {nix_name})."
+            )
+            run_maintenance_switch_on_vm(machine)
+
+        print(
+            f"[bold white]{machine}[/bold white] switched [green]successfully[/green]."
+        )
+        print()
+
+
 def run_maintenance_switch_on_vm(vm_name: str):
     with Progress(transient=True) as progress:
         task = progress.add_task("", total=None)
@@ -224,5 +287,5 @@ def run_maintenance_switch_on_vm(vm_name: str):
                 )
                 print("STDOUT:", e.stdout.decode("utf-8"))
                 print("STDERR:", e.stderr.decode("utf-8"))
-                return
+                raise
             progress.update(task, advance=1)

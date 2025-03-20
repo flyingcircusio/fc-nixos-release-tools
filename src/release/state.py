@@ -9,7 +9,7 @@ STATE_FILE = Path("state.json")
 
 class STAGE(StrEnum):
     START = "start"
-    BRANCH = "branch"
+    MERGE = "merge"
     TAG = "tag"
     DONE = "done"
 
