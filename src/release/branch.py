@@ -172,16 +172,6 @@ class Release:
         orig_stag_rev = self.branch_state.get(
             "orig_staging_commit", "<unknown rev>"
         )
-        if self.nixos_version == "21.05":
-            print(
-                f"Staging: hydra commit id correct ({orig_stag_rev}), build green, does some physical machine in WHQ build it? [Enter to confirm]"
-            )
-            input()
-            print(
-                "Staging: sensu checks green for hardware in WHQ? [Enter to confirm]"
-            )
-            input()
-            return
         prefix = machine_prefix(self.nixos_version)
         print(
             f"Staging: hydra commit id correct ({orig_stag_rev}), build green, does {prefix}stag00 build it? [Enter to confirm]"
@@ -328,15 +318,10 @@ def test_branch(state: State, nixos_version: str):
             "Failed to retrieve channel url. Please add it manually in the next step"
         )
 
-    if nixos_version == "21.05":
-        print(
-            "Production: switch a test VM to the 21.05-production-next channel. Is it working correctly?"
-        )
-    else:
-        prefix = machine_prefix(nixos_version)
-        print(
-            f"Production: On {prefix}prod00, switch to new system. Is it working correctly?"
-        )
+    prefix = machine_prefix(nixos_version)
+    print(
+        f"Production: On {prefix}prod00, switch to new system. Is it working correctly?"
+    )
     print(
         "Check switch output for unexpected service restarts, compare with changelog, impact properly documented? [Enter to edit]"
     )
