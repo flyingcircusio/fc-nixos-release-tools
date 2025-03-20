@@ -160,7 +160,7 @@ def start(
     print()
 
     print("[purple]" + "=" * 80 + "[/purple]")
-    for version in versions:
+    for version in sorted(state["branches"].keys()):
         print(CHECKLIST_VERSION.format(version=version))
     print(CHECKLIST_FOOTER.format(release_date=release_date.isoformat()))
     print("[purple]" + "=" * 80 + "[/purple]")
