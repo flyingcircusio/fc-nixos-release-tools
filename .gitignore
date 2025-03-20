@@ -3,6 +3,7 @@
 *.egg-info
 __pycache__
 result
+*.sublime-*
 
 # don't regularly check in the release state
 /state.json
