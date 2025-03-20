@@ -107,7 +107,6 @@ class Release:
         )
 
     def has_pending_changes(self):
-        return True
         try:
             git(
                 FC_NIXOS,
