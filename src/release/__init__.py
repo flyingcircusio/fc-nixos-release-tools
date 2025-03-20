@@ -273,26 +273,26 @@ def main():
     status_parser = subparser.add_parser("status")
     status_parser.set_defaults(func=status)
 
-    add_branch_parser = subparser.add_parser("merge-production")
-    add_branch_parser.add_argument(
+    merge_production_parser = subparser.add_parser("merge-production")
+    merge_production_parser.add_argument(
         "nixos_version",
         help="NixOS versions to add.",
     )
-    add_branch_parser.add_argument(
+    merge_production_parser.add_argument(
         "--steps",
         default=",".join(branch.STEPS),
         nargs="?",
         type=partial(comma_separated_list, choices=branch.STEPS),
         help="Comma-separated list of steps to execute.",
     )
-    add_branch_parser.set_defaults(func=branch.add_branch)
+    merge_production_parser.set_defaults(func=branch.merge_production)
 
-    test_branch_parser = subparser.add_parser("release-production")
-    test_branch_parser.add_argument(
+    release_production_parser = subparser.add_parser("release-production")
+    release_production_parser.add_argument(
         "nixos_version",
         help="NixOS versions to test.",
     )
-    test_branch_parser.set_defaults(func=branch.test_branch)
+    release_production_parser.set_defaults(func=branch.release_production)
 
     doc_parser = subparser.add_parser("doc")
     doc_parser.set_defaults(func=doc.main)

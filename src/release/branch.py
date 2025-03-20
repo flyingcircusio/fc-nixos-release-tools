@@ -287,7 +287,7 @@ class Release:
         )
 
 
-def add_branch(state: State, nixos_version: str, steps: list[str]):
+def merge_production(state: State, nixos_version: str, steps: list[str]):
     if nixos_version in state["branches"] or state["stage"] != STAGE.BRANCH:
         logging.warning(
             f"Branch '{nixos_version}' already added or no longer in 'branch' stage"
@@ -305,7 +305,7 @@ def add_branch(state: State, nixos_version: str, steps: list[str]):
         getattr(release, step_name)()
 
 
-def test_branch(state: State, nixos_version: str):
+def release_production(state: State, nixos_version: str):
     if nixos_version not in state["branches"]:
         logging.error(f"Please add '{nixos_version}' before testing it")
         return
