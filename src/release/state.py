@@ -8,7 +8,7 @@ STATE_FILE = Path("state.json")
 
 
 class STAGE(StrEnum):
-    INIT = "init"
+    START = "start"
     BRANCH = "branch"
     TAG = "tag"
     DONE = "done"
@@ -31,7 +31,7 @@ class State(TypedDict, total=False):
 
 
 def new_state() -> State:
-    return {"stage": STAGE.INIT, "branches": defaultdict(dict)}
+    return {"stage": STAGE.START, "branches": {}}
 
 
 def load_state() -> State:

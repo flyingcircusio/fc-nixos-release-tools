@@ -12,7 +12,6 @@ from .utils import (
     checkout,
     ensure_repo,
     git,
-    git_stdout,
     load_json,
     machine_prefix,
     prompt,
@@ -21,7 +20,6 @@ from .utils import (
 
 STEPS = [
     "prepare",
-    "skip_no_change",
     "diff_release",
     "check_hydra",
     "collect_changelog",
@@ -87,9 +85,10 @@ def generate_nixpkgs_changelog(old_rev: str, new_rev: str) -> MarkdownTree:
 
 class Release:
     def __init__(self, state: State, nixos_version: str):
+        self.state = state
         self.release_id = state["release_id"]
         self.nixos_version = nixos_version
-        self.branch_state = state["branches"][nixos_version]
+        self.branch_state = state["branches"].get(nixos_version, {})
         self.branch_state.pop("tested", None)
 
         self.branch_dev = f"fc-{self.nixos_version}-dev"
@@ -107,7 +106,8 @@ class Release:
             FC_NIXOS, self.branch_stag
         )
 
-    def skip_no_change(self):
+    def has_pending_changes(self):
+        return True
         try:
             git(
                 FC_NIXOS,
@@ -116,15 +116,18 @@ class Release:
                 self.branch_stag,
                 self.branch_prod,
             )
-            logging.error(f"No changes for {self.nixos_version} detected")
-            raise SystemExit(1)
         except subprocess.CalledProcessError as e:
             if e.returncode != 1:
                 raise
+            return True
+        return False
+
+    def register(self):
+        self.state["branches"][self.nixos_version] = self.branch_state
 
     def diff_release(self):
         def cherry(upstream: str, head: str):
-            res = git_stdout(FC_NIXOS, "cherry", upstream, head, "-v")
+            res = git(FC_NIXOS, "cherry", upstream, head, "-v")
             print(
                 f"Commits in {head}, not in {upstream} ({len(res.splitlines())}):"
             )

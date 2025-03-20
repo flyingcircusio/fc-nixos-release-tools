@@ -19,11 +19,11 @@ Each command is atomic and can be interrupted.
 
 Example usage:
 ```bash
-./result/bin/release init
-./result/bin/release add-branch 23.11
-./result/bin/release add-branch 24.05
-./result/bin/release test-branch 23.11
-./result/bin/release test-branch 24.05
+./result/bin/release start
+./result/bin/release merge-production 23.11
+./result/bin/release merge-production 24.05
+./result/bin/release release-production 23.11
+./result/bin/release release-production 24.05
 ./result/bin/release doc
 ./result/bin/release tag
 ```

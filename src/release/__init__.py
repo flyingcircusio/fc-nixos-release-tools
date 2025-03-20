@@ -8,16 +8,23 @@ from typing import Optional
 
 from rich import print
 from rich.logging import RichHandler
+from rich.markdown import Markdown
+from rich.progress import Progress
+from rich.prompt import Confirm
+from rich.table import Table
 
 from . import branch, doc
+from .branch import Release
 from .state import STAGE, State, load_state, new_state, store_state
-from .utils import prompt
+from .utils import FC_NIXOS, ensure_repo, git, prompt
+
+N_A = "[i]n/a[/i]"
 
 AVAILABLE_CMDS = {
-    STAGE.INIT: ["init", "status"],
-    STAGE.BRANCH: ["add-branch", "test-branch", "doc", "status"],
-    STAGE.TAG: ["tag", "add-branch", "status"],
-    STAGE.DONE: ["init", "status"],
+    STAGE.START: ["start", "status"],
+    STAGE.BRANCH: ["merge-production", "release-production", "doc", "status"],
+    STAGE.TAG: ["tag", "merge-production", "status"],
+    STAGE.DONE: ["start", "status"],
 }
 
 
@@ -47,23 +54,65 @@ def comma_separated_list(arg_value: str, choices=None):
     return separated
 
 
-def init(
+CHECKLIST_VERSION = """
+## NixOS {version}
+
+- [ ] `./release merge-production {version}`
+- [ ] `./release release-production {version}`
+"""
+
+CHECKLIST_FOOTER = """
+
+## Documentation and announcement
+
+- [ ] `./release doc`
+  - [ ] check rendered changelog
+    - can be sped up by `ssh doc.flyingcircus.io sudo systemctl start update-platformdoc.service`
+  - [ ] activate "keep" for the Hydra job flyingcircus:fc-*-production:release
+
+- [ ] Announce
+  - [ ] [Create maintenance status page](https://manage.statuspage.io/pages/vk1n4gx65z5k/incidents/new-scheduled-maintenance)
+    - [ ] only notifications now
+- [ ] Announce release in Matrix (room General) and link to change log
+
+## Shortly before release ({release_date} 20:45 Europe/Berlin)
+
+- [ ] double-check that production environments are set up correctly as documented in `./release status`
+
+## Around the announced release time (shortly before or after):
+
+- [ ] Tag released commits in production branches: `./release tag`
+
+## After release
+
+- [ ] Copy output from `./release status` into a comment of this issue.
+
+"""
+
+
+def start(
     state: State,
     release_id: Optional[str],
     release_date: Optional[datetime.date],
 ):
     state.clear()
     state.update(new_state())
+    print("Starting a new release cycle.")
+    print()
     if not release_date:
         today = datetime.date.today()
         # next monday
         default = today + datetime.timedelta(days=8 - today.isoweekday())
+
         release_date = prompt(
-            "Release date?", default=default, conv=release_date_type
+            "Next release date",
+            default=default,
+            default_display=default.strftime("%A, %Y-%m-%d"),
+            conv=release_date_type,
         )
     if not release_id:
         release_id = prompt(
-            "Release id?",
+            "Next release ID",
             default=doc.next_release_id(release_date),
             conv=release_id_type,
         )
@@ -71,32 +120,90 @@ def init(
     state["release_date"] = release_date.isoformat()
     state["stage"] = STAGE.BRANCH
 
+    # Gather releases with changes
+    print()
+    with Progress(transient=True) as progress:
+        # First, determine all relevant branches that might want to be released
+        task = progress.add_task("Determining platform versions", total=None)
+        versions = set()
+        ensure_repo(FC_NIXOS, "git@github.com:flyingcircusio/fc-nixos.git")
+        branches = git(FC_NIXOS, "branch", "--all").splitlines()
+        branches = [b.strip().strip("*").strip() for b in branches]
+        for branch in branches:
+            if not (
+                m := re.match(
+                    r"remotes/origin/fc\-([0-9]{2}.[0-9]{2})-production", branch
+                )
+            ):
+                continue
+            versions.add(m.groups()[0])
+        versions = list(versions)
+        versions.sort()
+        progress.update(task, total=len(versions))
+        # Now, check every version/branch for changes
+        for version in versions:
+            progress.update(
+                task, description=f"Checking [green]{version}[/green]"
+            )
+            r = Release(state, version)
+            r.prepare()
+            if r.has_pending_changes():
+                print(f"Marking [green]{version}[/green] for release.")
+                r.register()
+            progress.update(task, advance=1)
+
+    # Produce the checklist to
+
+    print(
+        "Please copy the following markdown snippets to the checklist of the release ticket."
+    )
+    print()
+
+    print("[purple]" + "=" * 80 + "[/purple]")
+    for version in versions:
+        print(CHECKLIST_VERSION.format(version=version))
+    print(CHECKLIST_FOOTER.format(release_date=release_date.isoformat()))
+    print("[purple]" + "=" * 80 + "[/purple]")
+
+    while not Confirm("Have you copied the checklist to the release issue?"):
+        pass
+
 
 def status(state: State, header: bool = True):
     if header:
-        if "release_id" in state and "release_date" in state:
-            print(
-                f"Current release: {state['release_id']} ({state['release_date']})"
-            )
-        print(f"You are in stage: {state['stage']}")
-        print(
-            "The following subcommands are available: "
-            + ", ".join(AVAILABLE_CMDS[state["stage"]])
+        table = Table.grid(padding=1, pad_edge=True, expand=True)
+        table.title = "[b]Release status[/b]"
+        table.add_column(justify="right", style="bold green")
+        table.add_column()
+        table.add_row("Stage", state.get("stage"))
+        table.add_row("Next release ID", state.get("release_id", N_A))
+        table.add_row("Next release date", state.get("release_date", N_A))
+        table.add_row("Changelog URL", state.get("changelog_url", N_A))
+        table.add_row(
+            "Available commands",
+            Markdown(
+                "\n".join(
+                    f"* `{cmd}`" for cmd in AVAILABLE_CMDS[state.get("stage")]
+                )
+            ),
         )
-        print()
+        print(table)
 
-        print("This release contains the following nixos versions:")
-        for k, v in state["branches"].items():
-            test_state = "tested" if "tested" in v else "untested"
-            print(f"{k}: {test_state}")
-        print()
+        if branches := state.get("branches"):
+            table = Table()
+            table.add_column(
+                "NixOS release", justify="right", style="bold white"
+            )
+            table.add_column("Status")
+            for k, v in branches.items():
+                test_state = (
+                    "[green]tested[/green]"
+                    if "tested" in v
+                    else "[yellow]untested[/yellow]"
+                )
+                table.add_row(k, test_state)
+            print(table)
     match state["stage"]:
-        case STAGE.INIT:
-            print("Call init to create a new release")
-        case STAGE.BRANCH:
-            print("Call add-branch to add a new nixos version to this release")
-            print("Call test-branch to test an existing nixos version")
-            print("Call doc to finish")
         case STAGE.TAG:
             print("Remember to do the following tasks:")
             print("Now:")
@@ -122,10 +229,6 @@ def status(state: State, header: bool = True):
             )
             print("Call tag")
         case STAGE.DONE:
-            print("Summary of this release:")
-            print(f"Release at: {state['release_date']} 21:00")
-            print("Release ID: " + state["release_id"])
-            print("Changelog url: " + state["changelog_url"])
             for k, v in state["branches"].items():
                 print()
                 print(f"## NixOS {k}")
@@ -134,7 +237,7 @@ def status(state: State, header: bool = True):
                 print("Hydra eval id: " + v["hydra_eval_id"])
 
             print()
-            print("Call init to create a new release")
+            print("Call `./release start` to start a new release cycle.")
 
 
 def main():
@@ -150,25 +253,25 @@ def main():
     )
     subparser = parser.add_subparsers(dest="command")
 
-    init_parser = subparser.add_parser("init")
-    init_parser.add_argument(
+    start_parser = subparser.add_parser("start")
+    start_parser.add_argument(
         "release_id",
         nargs="?",
         type=release_id_type,
-        help="Release id in the form YYYY_NNN",
+        help="Release ID in the form YYYY_NNN",
     )
-    init_parser.add_argument(
+    start_parser.add_argument(
         "release_date",
         nargs="?",
         type=release_date_type,
-        help="set planned roll-out date",
+        help="Targeted roll-out date",
     )
-    init_parser.set_defaults(func=init)
+    start_parser.set_defaults(func=start)
 
     status_parser = subparser.add_parser("status")
     status_parser.set_defaults(func=status)
 
-    add_branch_parser = subparser.add_parser("add-branch")
+    add_branch_parser = subparser.add_parser("merge-production")
     add_branch_parser.add_argument(
         "nixos_version",
         help="NixOS versions to add.",
@@ -182,7 +285,7 @@ def main():
     )
     add_branch_parser.set_defaults(func=branch.add_branch)
 
-    test_branch_parser = subparser.add_parser("test-branch")
+    test_branch_parser = subparser.add_parser("release-production")
     test_branch_parser.add_argument(
         "nixos_version",
         help="NixOS versions to test.",

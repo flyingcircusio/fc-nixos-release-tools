@@ -19,13 +19,16 @@ def prompt(
     prompt: str,
     *,
     default: Optional[Any] = None,
+    default_display: Optional[str] = None,
     str_default: Optional[str] = None,
     conv: Callable = str,
 ):
     if str_default is None and default is not None:
         str_default = str(default)
-    if str_default is not None:
-        prompt += f" ([prompt.default]{str_default}[/prompt.default])"
+    if default_display is None:
+        default_display = str_default
+    if default_display is not None:
+        prompt += f" ([prompt.default]{default_display}[/prompt.default])"
     prompt += ": "
     while True:
         i = get_console().input(prompt)
@@ -44,26 +47,26 @@ def prompt(
             )
 
 
-def git(path: Path, *cmd: str, check=True, **kw):
+def git_tty(path: Path, *cmd: str, check=True, **kw):
     return subprocess.run(["git"] + list(cmd), cwd=path, check=check, **kw)
 
 
-def git_stdout(path: Path, *cmd: str, **kw):
+def git(path: Path, *cmd: str, **kw):
     return subprocess.check_output(
         ["git"] + list(cmd), cwd=path, text=True, **kw
     )
 
 
 def rev_parse(path: Path, rev: str):
-    return git_stdout(path, "rev-parse", "--verify", rev).strip()
+    return git(path, "rev-parse", "--verify", rev).strip()
 
 
 def load_json(path: Path, rev: str, obj_path: str):
-    return json.loads(git_stdout(path, "show", rev + ":" + obj_path))
+    return json.loads(git(path, "show", rev + ":" + obj_path))
 
 
 def git_remote(path: Path):
-    out = git_stdout(path, "remote", "-v")
+    out = git(path, "remote", "-v")
     return re.findall(r"^origin\s(.+?)\s\(.+\)$", out, re.MULTILINE)
 
 
@@ -73,7 +76,10 @@ def ensure_repo(path: Path, url: str, *fetch_args: str):
         git(path, "init")
     if (remotes := set(git_remote(path))) != {url}:
         if remotes:
-            git(path, "remote", "rm", "origin", check=False)
+            try:
+                git(path, "remote", "rm", "origin")
+            except subprocess.SubprocessError:
+                pass
         git(path, "remote", "add", "origin", url)
     git(
         path,
