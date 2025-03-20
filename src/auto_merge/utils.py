@@ -16,6 +16,7 @@ from gql.transport.requests import RequestsHTTPTransport
 from gql.transport.requests import log as requests_logger
 
 from auto_merge.config import Config
+from utils.timeout import TimeOut
 
 requests_logger.setLevel(logging.WARNING)
 
@@ -103,6 +104,21 @@ def get_label_values_for_pr(labels: list[Label]) -> (int | None, int | None):
 def check_pr_mergeable(
     repo: Repository, pr: PullRequest, token: str, config: Config
 ) -> bool:
+    # Wait until PR is no longer in mergeable state `unknown`
+    if pr.mergeable_state == "unknown":
+        try:
+            timeout = TimeOut(30, interval=1)
+            while timeout.tick():
+                if pr.mergeable_state == "unknown":
+                    pr = repo.get_pull(pr.number)
+                else:
+                    break
+        except TimeoutError:
+            logging.debug(
+                f"PR {pr.number} is still in merge conflict state unknown after timeout."
+            )
+            pass
+
     if not pr.mergeable:
         logging.info(
             f"PR {pr.number} has conflicts (state {pr.mergeable_state}). Not mergeable."
