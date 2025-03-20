@@ -3,16 +3,23 @@ import json
 import os
 import re
 import subprocess
+import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from rich import get_console
+import requests
+from rich import get_console, print
+from rich.progress import Progress
 
 EDITOR = os.environ.get("EDITOR", "nano")
 WORK_DIR = Path("work")
 FC_NIXOS = WORK_DIR / "fc-nixos"
 FC_DOCS = WORK_DIR / "doc"
 TEMP_CHANGELOG = WORK_DIR / "temp_changelog.md"
+HYDRA_URL = "https://hydra.flyingcircus.io"
+HYDRA_EVALS_URL = f"{HYDRA_URL}/jobset/flyingcircus/{{branch}}/evals"
+HYDRA_RELEASE_BUILD_URL = f"{HYDRA_URL}/eval/{{eval_id}}/job/release"
 
 
 def prompt(
@@ -105,3 +112,87 @@ def checkout(path: Path, branch: str, reset: bool = False, clean: bool = False):
 
 def machine_prefix(nixos_version: str):
     return "release" + nixos_version.replace(".", "")
+
+
+def iter_hydra(url: str, item_key: str):
+    page = ""
+    while True:
+        r = requests.get(url + page, headers={"Accept": "application/json"})
+        r.raise_for_status()
+        j = r.json()
+        for item in j[item_key]:
+            yield item
+        if "last" not in j or page == j["last"]:
+            break
+        page = j["next"]
+
+
+def get_hydra_eval_id_for_commit(branch: str, commit_hash: str):
+    try:
+        evals = iter_hydra(HYDRA_EVALS_URL.format(branch=branch), "evals")
+        for eval in evals:
+            if eval["jobsetevalinputs"]["fc"]["revision"] == commit_hash:
+                return eval["id"]
+    except Exception as e:
+        print("[red]Error fetching hydra evals", e)
+        raise RuntimeError("Error fetching hydra evals")
+
+
+def get_hydra_release_build(eval_id: str):
+    """
+    Gets the status of the `release` build of the eval with the given branch and commit
+    :return: None, when build is still running. Otherwise, status int
+    """
+    hydra_build_url = HYDRA_RELEASE_BUILD_URL.format(eval_id=eval_id)
+    r = requests.get(hydra_build_url, headers={"Accept": "application/json"})
+    r.raise_for_status()
+    return r.json()
+
+
+@dataclass
+class HydraReleaseBuild:
+    nix_name: str
+    eval_id: str
+
+
+def wait_for_successful_hydra_release_build(
+    branch: str, commit_hash: str
+) -> HydraReleaseBuild:
+    with Progress(transient=True) as progress:
+        task = progress.add_task(
+            f"[yellow]Waiting for hydra eval in {branch} with commit {commit_hash} to be created...",
+            total=None,
+        )
+        print("Check hydra evals: " + HYDRA_EVALS_URL.format(branch=branch))
+
+        while not progress.finished:
+            eval_id = get_hydra_eval_id_for_commit(branch, commit_hash)
+            if eval_id is None:
+                time.sleep(10)
+                continue
+            print(f"Staging new eval id: {eval_id}")
+            progress.update(task, total=1, advance=1)
+
+    with Progress(transient=True) as progress:
+        task = progress.add_task(
+            "[yellow]Waiting for hydra release build to finish...", total=None
+        )
+        print(
+            "Check hydra release build for status: "
+            + HYDRA_RELEASE_BUILD_URL.format(eval_id=eval_id)
+        )
+        while not progress.finished:
+            build = get_hydra_release_build(eval_id)
+            if build["finished"] != 1:
+                time.sleep(10)
+                continue
+
+            if build["buildstatus"] == 0:
+                progress.update(task, total=1, advance=1)
+                nix_name = build["nixname"].split("release-")[1]
+                return HydraReleaseBuild(nix_name, eval_id)
+
+            print(
+                f"[red]Hydra release build for {branch} and commit {commit_hash} is unsuccessful"
+            )
+            raise RuntimeError("Hydra release build is unsuccessful")
