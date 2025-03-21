@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from os import path
 from pathlib import Path
 from subprocess import check_output
+from textwrap import dedent
 
 from git import Commit, Repo
 from git.exc import GitCommandError
@@ -233,18 +234,20 @@ def create_fc_nixos_pr(
             base=target_branch,
             head=integration_branch,
             title=f"[{platform_version}] Automated nixpkgs update {now}",
-            body=f"""\
-    @flyingcircusio/release-managers
+            body=dedent(
+                f"""\
+                @flyingcircusio/release-managers
 
-    View nixpkgs update branch: [{integration_branch}](https://github.com/{NIXPKGS_REPO}/tree/{integration_branch})
+                View nixpkgs update branch: [{integration_branch}](https://github.com/{NIXPKGS_REPO}/tree/{integration_branch})
 
-    Review Checklist:
+                Review Checklist:
 
-    - [ ] Hydra is green
-    - [ ] Package update versions look reasonable
+                - [ ] Hydra is green
+                - [ ] Package update versions look reasonable
 
-    When manual changes are required: Push to the nixpkgs update branch, and run [the GitHub Action](https://github.com/flyingcircusio/fc-nixos-release-tools/actions/workflows/update-nixpkgs.yaml) manually.
-    """,
+                When manual changes are required: Push to the nixpkgs update branch, and run [the GitHub Action](https://github.com/flyingcircusio/fc-nixos-release-tools/actions/workflows/update-nixpkgs.yaml) manually.
+            """
+            ),
         )
     except Exception:
         logging.exception(
