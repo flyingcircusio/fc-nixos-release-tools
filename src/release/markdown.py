@@ -126,6 +126,6 @@ class MarkdownTree:
             + self.to_str()
             + "\n\n<!-- vim: set spell spelllang=en: -->"
         )
-        subprocess.run([EDITOR, str(TEMP_CHANGELOG)])
+        subprocess.run(EDITOR + [str(TEMP_CHANGELOG)])
         self.copy_from(MarkdownTree.from_str(TEMP_CHANGELOG.read_text()))
         TEMP_CHANGELOG.unlink()

@@ -6,7 +6,7 @@ import requests
 from rich import print
 from rich.markdown import Markdown
 from rich.progress import Progress
-from rich.prompt import Confirm
+from rich.prompt import Confirm, Prompt
 
 from .markdown import MarkdownTree
 from .state import STAGE, State
@@ -226,17 +226,19 @@ class Release:
         )
         new_fragment |= generate_nixpkgs_changelog(old_rev, new_rev)
 
-        print(Markdown(new_fragment))
+        print(Markdown(new_fragment.to_str()))
+        print()
 
         while (
-            Confirm.choice(
+            Prompt.ask(
                 "Do you want to [green]edit[/green] the fragment or [green]continue[/green]?",
                 choices=["edit", "continue"],
             )
             == "edit"
         ):
             new_fragment.open_in_editor()
-            print(Markdown(new_fragment))
+            print(Markdown(new_fragment.to_str()))
+            print()
 
         self.branch_state["changelog"] = new_fragment.to_str()
 

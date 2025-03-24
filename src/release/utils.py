@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import socket
 import subprocess
 import time
@@ -13,7 +14,7 @@ import requests
 from rich import get_console, print
 from rich.progress import Progress
 
-EDITOR = os.environ.get("EDITOR", "nano")
+EDITOR = shlex.split(os.environ.get("EDITOR", "nano"))
 WORK_DIR = Path("work")
 FC_NIXOS = WORK_DIR / "fc-nixos"
 FC_DOCS = WORK_DIR / "doc"
