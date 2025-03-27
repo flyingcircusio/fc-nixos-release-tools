@@ -205,6 +205,21 @@ def wait_for_successful_hydra_release_build(
             raise RuntimeError("Hydra release build is unsuccessful")
 
 
+def get_remote_nix_name(machine: str):
+    return (
+        subprocess.check_output(
+            [
+                "ssh",
+                machine,
+                "cat",
+                "/run/current-system/nixos-version",
+            ]
+        )
+        .decode("utf-8")
+        .strip()
+    )
+
+
 def verify_machines_are_current(prefix, nix_name):
     print()
     print("[bold white]Verifying test machines[/bold white]")
@@ -243,23 +258,19 @@ def verify_machines_are_current(prefix, nix_name):
         print(
             f"Validating whether [bold white]{machine}[/bold white] has switched successfully ..."
         )
-        remote_nix_name = (
-            subprocess.check_output(
-                [
-                    "ssh",
-                    machine,
-                    "cat",
-                    "/run/current-system/nixos-version",
-                ]
-            )
-            .decode("utf-8")
-            .strip()
-        )
+        remote_nix_name = get_remote_nix_name(machine)
         if remote_nix_name != nix_name:
             print(
                 f"{machine} has [red]not yet switched to the new release[/red] (nixname {nix_name})."
             )
             run_maintenance_switch_on_vm(machine)
+
+        remote_nix_name = get_remote_nix_name(machine)
+        if remote_nix_name != nix_name:
+            print(
+                f"[bold white]{machine}[/bold white] switched [red]not successful[/red]."
+            )
+            raise RuntimeError(f"Switch on {machine} not successful.")
 
         print(
             f"[bold white]{machine}[/bold white] switched [green]successfully[/green]."
@@ -267,7 +278,28 @@ def verify_machines_are_current(prefix, nix_name):
         print()
 
 
-def run_maintenance_switch_on_vm(vm_name: str):
+def wait_for_vm_reboot(machine: str):
+    with Progress(transient=True) as progress:
+        task = progress.add_task(f"Waiting for reboot of {machine}", total=None)
+
+        while not progress.finished:
+            out = subprocess.run(
+                ["ping", "-c", "-1", machine], check=True, capture_output=True
+            )
+            if out.returncode != 0:
+                time.sleep(1)
+                continue
+            # Just a connection test
+            out = subprocess.run(
+                ["ssh", machine, "echo"], check=True, capture_output=True
+            )
+            if out.returncode != 0:
+                time.sleep(1)
+                continue
+            progress.update(task, total=1, advance=1)
+
+
+def run_maintenance_switch_on_vm(machine: str):
     with Progress(transient=True) as progress:
         task = progress.add_task("", total=None)
         cmds = [
@@ -279,19 +311,24 @@ def run_maintenance_switch_on_vm(vm_name: str):
         for cmd in cmds:
             progress.update(
                 task,
-                description=f"{vm_name}: {cmd}",
+                description=f"{machine}: {cmd}",
             )
             try:
                 subprocess.run(
-                    ["ssh", vm_name] + cmd.split(" "),
+                    ["ssh", machine] + cmd.split(" "),
                     check=True,
                     capture_output=True,
                 )
             except subprocess.CalledProcessError as e:
+                stdout = e.stdout.decode("utf-8")
+                stderr = e.stderr.decode("utf-8")
+                if "maintenance-reboot" in stdout:
+                    wait_for_vm_reboot(machine)
+                    pass
                 print(
-                    f"Staging: [red]Switching {vm_name} failed with code {e.returncode}!",
+                    f"Staging: [red]Switching {machine} failed with code {e.returncode}!",
                 )
-                print("STDOUT:", e.stdout.decode("utf-8"))
-                print("STDERR:", e.stderr.decode("utf-8"))
+                print("STDOUT:", stdout)
+                print("STDERR:", stderr)
                 raise
             progress.update(task, advance=1)
