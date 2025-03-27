@@ -198,3 +198,11 @@ def check_pr_mergeable(
             )
             return False
     return True
+
+
+def create_pr_comment(pr: PullRequest, merge_date: datetime.date):
+    msg = f"This PR is ready to merge. Merge scheduled for {merge_date.isoformat()}"
+    for comment in pr.get_issue_comments():
+        if comment.body == msg:
+            return
+    pr.create_issue_comment(msg)

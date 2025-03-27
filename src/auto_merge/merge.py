@@ -31,6 +31,7 @@ def merge_prs(config: Config, gh: Github, github_access_token: str):
             continue
         risk, urgency = utils.get_label_values_for_pr(pr.labels)
         merge_date = utils.calculate_merge_date(risk, urgency, config)
+        utils.create_pr_comment(pr, merge_date)
         if merge_date == today:
             logging.info(f"Merging PR {pr.number}.")
             pr.merge()

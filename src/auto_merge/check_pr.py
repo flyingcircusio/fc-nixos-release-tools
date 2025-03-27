@@ -21,8 +21,4 @@ def check_pr(pr_id: int, github_access_token: str, config: Config):
     )
     if mergeable:
         merge_date = utils.calculate_merge_date(risk, urgency, config)
-        msg = f"This PR is ready to merge. Merge scheduled for {merge_date.isoformat()}"
-        for comment in pr.get_issue_comments():
-            if comment.body == msg:
-                return
-        pr.create_issue_comment(msg)
+        utils.create_pr_comment(pr, merge_date)
