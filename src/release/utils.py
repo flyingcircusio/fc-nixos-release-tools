@@ -103,6 +103,24 @@ class HydraReleaseBuild:
     eval_id: str
 
 
+def trigger_rolling_release_update():
+    with Progress(transient=True) as progress:
+        task = progress.add_task(
+            "Triggering directory release update from Hydra ..."
+        )
+        subprocess.run(
+            [
+                "ssh",
+                "services59",
+                "sudo",
+                "systemctl",
+                "start",
+                "update_rolling_releases",
+            ]
+        )
+        progress.update(task, total=1, advance=1)
+
+
 def wait_for_successful_hydra_release_build(
     branch: str, commit_hash: str
 ) -> HydraReleaseBuild:
