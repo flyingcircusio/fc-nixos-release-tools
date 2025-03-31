@@ -1,25 +1,16 @@
 import logging
-import socket
 import subprocess
 
 import requests
 from rich import print
 from rich.markdown import Markdown
-from rich.progress import Progress
 from rich.prompt import Confirm, Prompt
 
+from .git import FC_NIXOS
 from .markdown import MarkdownTree
 from .state import STAGE, State
 from .utils import (
-    FC_NIXOS,
-    HydraReleaseBuild,
-    checkout,
-    ensure_repo,
-    git,
-    load_json,
     machine_prefix,
-    rev_parse,
-    run_maintenance_switch_on_vm,
     verify_machines_are_current,
     wait_for_successful_hydra_release_build,
 )
@@ -36,19 +27,20 @@ STEPS = [
     "push",
 ]
 
-CHANGELOG = FC_NIXOS / "changelog.d" / "CHANGELOG.md"
+CHANGELOG = FC_NIXOS.path / "changelog.d" / "CHANGELOG.md"
 
 
 def generate_nixpkgs_changelog(old_rev: str, new_rev: str) -> MarkdownTree:
     res = MarkdownTree()
-    res[
-        "Detailed Changes"
-    ] += f"- [platform code](https://github.com/flyingcircusio/fc-nixos/compare/{old_rev}...{new_rev})"
+    res["Detailed Changes"] += (
+        f"- [platform code](https://github.com/flyingcircusio/fc-nixos/"
+        f"compare/{old_rev}...{new_rev})"
+    )
 
     pversions_path = "release/package-versions.json"
     try:
-        old_pversions = load_json(FC_NIXOS, old_rev, pversions_path)
-        new_pversions = load_json(FC_NIXOS, new_rev, pversions_path)
+        old_pversions = FC_NIXOS.show(old_rev, pversions_path)
+        new_pversions = FC_NIXOS.show(new_rev, pversions_path)
 
         lines = []
         for pkg_name in old_pversions:
@@ -64,27 +56,31 @@ def generate_nixpkgs_changelog(old_rev: str, new_rev: str) -> MarkdownTree:
 
         if lines:
             res["NixOS XX.XX platform"] += (
-                "- Pull upstream NixOS changes, security fixes and package updates:"
-                + "".join("\n    - " + m for m in lines)
+                "- Pull upstream NixOS changes, security fixes, and "
+                "package updates:" + "".join("\n    - " + m for m in lines)
             )
     except subprocess.CalledProcessError:
         logging.warning(
-            f"Could not find '{pversions_path}'. Continuing without package versions diff..."
+            f"Could not find '{pversions_path}'. Continuing without package "
+            f"versions diff..."
         )
 
     versions_path = "release/versions.json"
     try:
-        old_versions = load_json(FC_NIXOS, old_rev, versions_path)
-        new_versions = load_json(FC_NIXOS, new_rev, versions_path)
+        old_versions = FC_NIXOS.show(old_rev, versions_path)
+        new_versions = FC_NIXOS.show(new_rev, versions_path)
         old_nixpkgs_rev = old_versions["nixpkgs"]["rev"]
         new_nixpkgs_rev = new_versions["nixpkgs"]["rev"]
         if old_nixpkgs_rev != new_nixpkgs_rev:
-            res[
-                "Detailed Changes"
-            ] += f"- [nixpkgs/upstream changes](https://github.com/flyingcircusio/nixpkgs/compare/{old_nixpkgs_rev}...{new_nixpkgs_rev})"
+            res["Detailed Changes"] += (
+                f"- [nixpkgs/upstream changes](https://github.com/"
+                f"flyingcircusio/nixpkgs/compare/"
+                f"{old_nixpkgs_rev}...{new_nixpkgs_rev})"
+            )
     except subprocess.CalledProcessError:
         logging.warning(
-            f"Could not find '{versions_path}' file. Continuing without nixpkgs changelog..."
+            f"Could not find '{versions_path}' file. Continuing without "
+            f"nixpkgs changelog..."
         )
 
     return res
@@ -103,30 +99,18 @@ class Release:
         self.branch_prod = f"fc-{self.nixos_version}-production"
 
     def prepare(self):
-        ensure_repo(FC_NIXOS, "git@github.com:flyingcircusio/fc-nixos.git")
+        FC_NIXOS.ensure_repo()
 
-        checkout(FC_NIXOS, self.branch_dev, reset=True, clean=True)
-        checkout(FC_NIXOS, self.branch_stag, reset=True, clean=True)
-        checkout(FC_NIXOS, self.branch_prod, reset=True, clean=True)
+        FC_NIXOS.checkout(self.branch_dev, reset=True, clean=True)
+        FC_NIXOS.checkout(self.branch_stag, reset=True, clean=True)
+        FC_NIXOS.checkout(self.branch_prod, reset=True, clean=True)
 
-        self.branch_state["orig_staging_commit"] = rev_parse(
-            FC_NIXOS, self.branch_stag
+        self.branch_state["orig_staging_commit"] = FC_NIXOS.rev_parse(
+            self.branch_stag
         )
 
     def has_pending_changes(self):
-        try:
-            git(
-                FC_NIXOS,
-                "merge-base",
-                "--is-ancestor",
-                self.branch_stag,
-                self.branch_prod,
-            )
-        except subprocess.CalledProcessError as e:
-            if e.returncode != 1:
-                raise
-            return True
-        return False
+        return FC_NIXOS.is_ancestor(self.branch_stag, self.branch_prod)
 
     def register(self):
         self.state["branches"][self.nixos_version] = self.branch_state
@@ -135,7 +119,7 @@ class Release:
         print()
         print("[bold white]Review commits[/bold white]")
         print()
-        print(git(FC_NIXOS, "cherry", self.branch_prod, self.branch_stag, "-v"))
+        print(FC_NIXOS._git("cherry", self.branch_prod, self.branch_stag, "-v"))
         print()
 
         while not Confirm.ask(
@@ -168,7 +152,7 @@ class Release:
             pass
 
     def collect_changelog(self):
-        checkout(FC_NIXOS, self.branch_stag)
+        FC_NIXOS.checkout(self.branch_stag)
         if not CHANGELOG.parent.exists():
             logging.warning(
                 f"Could not find '{str(CHANGELOG.parent)}'. Skipping changelog generation..."
@@ -193,8 +177,8 @@ class Release:
         CHANGELOG.write_text(new_changelog)
 
         try:
-            git(FC_NIXOS, "add", str(CHANGELOG.relative_to(FC_NIXOS)))
-            git(FC_NIXOS, "commit", "-m", "Collect changelog fragments")
+            FC_NIXOS._git("add", str(CHANGELOG.relative_to(FC_NIXOS)))
+            FC_NIXOS._git("commit", "-m", "Collect changelog fragments")
         except subprocess.CalledProcessError:
             logging.error(
                 "Failed to commit Changelog. Commit it manually and continue after the `collect_changelog` stage"
@@ -202,24 +186,24 @@ class Release:
             raise
 
     def merge(self):
-        checkout(FC_NIXOS, self.branch_prod)
+        FC_NIXOS.checkout(self.branch_prod)
         msg = (
             f"Merge branch '{self.branch_stag}' into "
             f"'{self.branch_prod}' for release {self.release_id}"
         )
-        git(FC_NIXOS, "merge", "-m", msg, self.branch_stag)
-        self.branch_state["new_production_commit"] = rev_parse(
+        FC_NIXOS._git("merge", "-m", msg, self.branch_stag)
+        self.branch_state["new_production_commit"] = FC_NIXOS.rev_parse(
             FC_NIXOS, self.branch_prod
         )
 
     def backmerge(self):
-        checkout(FC_NIXOS, self.branch_dev)
+        FC_NIXOS.checkout(self.branch_dev)
         msg = f"Backmerge branch '{self.branch_prod}' into '{self.branch_dev}'' for release {self.release_id}"
-        git(FC_NIXOS, "merge", "-m", msg, self.branch_prod)
+        FC_NIXOS._git("merge", "-m", msg, self.branch_prod)
 
     def add_detailed_changelog(self):
-        old_rev = rev_parse(FC_NIXOS, "origin/" + self.branch_prod)
-        new_rev = rev_parse(FC_NIXOS, self.branch_prod)
+        old_rev = FC_NIXOS.rev_parse("origin/" + self.branch_prod)
+        new_rev = FC_NIXOS.rev_parse(self.branch_prod)
 
         new_fragment = MarkdownTree.from_str(
             self.branch_state.get("changelog", "")
@@ -243,11 +227,10 @@ class Release:
         self.branch_state["changelog"] = new_fragment.to_str()
 
     def push(self):
-        remote = git(FC_NIXOS, "remote", "get-url", "--push", "origin")
+        remote = FC_NIXOS._git("remote", "get-url", "--push", "origin")
         print(f"[bold white]Pushing changes to [green]{remote}[/green] ...")
 
-        git(
-            FC_NIXOS,
+        FC_NIXOS._git(
             "push",
             "origin",
             self.branch_dev,
@@ -322,18 +305,17 @@ def release_production(state: State, nixos_version: str):
 
 
 def tag_branch(state: State):
-    ensure_repo(FC_NIXOS, "git@github.com:flyingcircusio/fc-nixos.git")
+    FC_NIXOS.ensure_repo()
     print(
         "activate 'keep' for the Hydra job flyingcircus:fc-*-production:release [Enter]"
     )
     input()
     for nixos_version in state["branches"].keys():
-        git(
-            FC_NIXOS,
+        FC_NIXOS._git(
             "tag",
             f"fc/r{state['release_id']}/{nixos_version}",
             f"fc-{nixos_version}-production",
         )
 
-    git(FC_NIXOS, "push", "--tags")
+    FC_NIXOS._git("push", "--tags")
     state["stage"] = STAGE.DONE

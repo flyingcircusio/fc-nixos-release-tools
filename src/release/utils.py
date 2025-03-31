@@ -1,4 +1,7 @@
 import argparse
+import asyncio
+import asyncio.subprocess
+import io
 import json
 import os
 import re
@@ -16,8 +19,7 @@ from rich.progress import Progress
 
 EDITOR = shlex.split(os.environ.get("EDITOR", "nano"))
 WORK_DIR = Path("work")
-FC_NIXOS = WORK_DIR / "fc-nixos"
-FC_DOCS = WORK_DIR / "doc"
+
 TEMP_CHANGELOG = WORK_DIR / "temp_changelog.md"
 HYDRA_URL = "https://hydra.flyingcircus.io"
 HYDRA_EVALS_URL = f"{HYDRA_URL}/jobset/flyingcircus/{{branch}}/evals"
@@ -54,62 +56,6 @@ def prompt(
             get_console().print(
                 str(e) or "Invalid value", style="prompt.invalid"
             )
-
-
-def git_tty(path: Path, *cmd: str, check=True, **kw):
-    return subprocess.run(["git"] + list(cmd), cwd=path, check=check, **kw)
-
-
-def git(path: Path, *cmd: str, **kw):
-    return subprocess.check_output(
-        ["git"] + list(cmd), cwd=path, text=True, **kw
-    )
-
-
-def rev_parse(path: Path, rev: str):
-    return git(path, "rev-parse", "--verify", rev).strip()
-
-
-def load_json(path: Path, rev: str, obj_path: str):
-    return json.loads(git(path, "show", rev + ":" + obj_path))
-
-
-def git_remote(path: Path):
-    out = git(path, "remote", "-v")
-    return re.findall(r"^origin\s(.+?)\s\(.+\)$", out, re.MULTILINE)
-
-
-def ensure_repo(path: Path, url: str, *fetch_args: str):
-    if not path.exists():
-        path.mkdir(parents=True)
-        git(path, "init")
-    if (remotes := set(git_remote(path))) != {url}:
-        if remotes:
-            try:
-                git(path, "remote", "rm", "origin")
-            except subprocess.SubprocessError:
-                pass
-        git(path, "remote", "add", "origin", url)
-    git(
-        path,
-        "fetch",
-        "origin",
-        "--tags",
-        "--prune",
-        "--prune-tags",
-        "--force",
-        *fetch_args,
-    )
-
-
-def checkout(path: Path, branch: str, reset: bool = False, clean: bool = False):
-    if reset:
-        git(path, "checkout", "-q", "-f", branch)
-        git(path, "reset", "-q", "--hard", f"origin/{branch}")
-    else:
-        git(path, "checkout", "-q", branch)
-    if clean:
-        git(path, "clean", "-d", "--force")
 
 
 def machine_prefix(nixos_version: str):
@@ -162,7 +108,7 @@ def wait_for_successful_hydra_release_build(
 ) -> HydraReleaseBuild:
     with Progress(transient=True) as progress:
         task = progress.add_task(
-            f"[yellow]Waiting for hydra eval in {branch} with commit {commit_hash} to be created...",
+            f"[red]Waiting for hydra eval in {branch} with commit {commit_hash} to be created...",
             total=None,
         )
         print(
@@ -181,7 +127,7 @@ def wait_for_successful_hydra_release_build(
     print()
     with Progress(transient=True) as progress:
         task = progress.add_task(
-            "[yellow]Waiting for hydra release build to finish...", total=None
+            "[red]Waiting for hydra release build to finish...", total=None
         )
         print(
             "    > You can manually check Hydra build status here: "
@@ -332,3 +278,60 @@ def run_maintenance_switch_on_vm(machine: str):
                 print("STDERR:", stderr)
                 raise
             progress.update(task, advance=1)
+
+
+# https://stackoverflow.com/questions/65649412/getting-live-output-from-asyncio-subprocess
+
+
+async def _read_stream(stream, cb):
+    while True:
+        line = await stream.readline()
+        if line:
+            cb(line)
+        else:
+            break
+
+
+async def _stream_subprocess(cmd, output, **kw):
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        # bufsize=1,
+        **kw,
+    )
+
+    await asyncio.gather(
+        _read_stream(process.stdout, output.receive_stdout),
+        _read_stream(process.stderr, output.receive_stderr),
+    )
+    return await process.wait()
+
+
+class Output:
+    def __init__(self, log):
+        self.log = log
+        self.joined = io.StringIO()
+        self.stdout = io.StringIO()
+        self.stderr = io.StringIO()
+
+    def receive_stdout(self, line):
+        line = line.decode("utf-8")
+        self.log.write(line)
+        self.joined.write(line)
+        self.stdout.write(line)
+
+    def receive_stderr(self, line):
+        line = line.decode("utf-8")
+        self.log.write(line)
+        self.joined.write(line)
+        self.stderr.write(line)
+
+
+def execute(cmd, **kw):
+    with open("commands.log", "a") as log:
+        output = Output(log)
+        cmd_repr = shlex.join(cmd)
+        output.log.write(f"$ {cmd_repr}\n")
+        rc = asyncio.run(_stream_subprocess(cmd, output, **kw))
+        return rc, output

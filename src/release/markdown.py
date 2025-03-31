@@ -5,7 +5,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Optional, Self
 
-from .utils import EDITOR, TEMP_CHANGELOG, git
+from .git import GitRepo
+from .utils import EDITOR, TEMP_CHANGELOG
 
 comment_re = re.compile(r"^\s*<!--.*?-->$", flags=re.DOTALL | re.MULTILINE)
 section_re = re.compile(
@@ -89,7 +90,7 @@ class MarkdownTree:
 
     @classmethod
     def collect(
-        cls, files: Iterable[Path], git_repo: Optional[Path] = None
+        cls, files: Iterable[Path], git_repo: Optional[GitRepo] = None
     ) -> Self:
         res = cls()
         for f in files:
@@ -98,7 +99,7 @@ class MarkdownTree:
             res |= cls.from_str(f.read_text())
             f.unlink()
             if git_repo:
-                git(git_repo, "add", str(f.relative_to(git_repo)))
+                git_repo._git("add", str(f.relative_to(git_repo)))
         return res
 
     def strip(self) -> None:

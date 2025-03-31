@@ -15,8 +15,9 @@ from rich.table import Table
 
 from . import branch, doc
 from .branch import Release
+from .git import FC_NIXOS
 from .state import STAGE, State, load_state, new_state, store_state
-from .utils import FC_NIXOS, ensure_repo, git, prompt
+from .utils import prompt
 
 N_A = "[i]n/a[/i]"
 
@@ -111,9 +112,13 @@ def start(
             conv=release_date_type,
         )
     if not release_id:
+        with Progress(transient=True) as progress:
+            t = progress.add_task("Determining next release ID", total=None)
+            next_id_suggestion = doc.next_release_id(release_date)
+            progress.update(t, total=1, advance=1)
         release_id = prompt(
             "Next release ID",
-            default=doc.next_release_id(release_date),
+            default=next_id_suggestion,
             conv=release_id_type,
         )
     state["release_id"] = release_id
@@ -125,20 +130,15 @@ def start(
     with Progress(transient=True) as progress:
         # First, determine all relevant branches that might want to be released
         task = progress.add_task("Determining platform versions", total=None)
-        versions = set()
-        ensure_repo(FC_NIXOS, "git@github.com:flyingcircusio/fc-nixos.git")
-        branches = git(FC_NIXOS, "branch", "--all").splitlines()
-        branches = [b.strip().strip("*").strip() for b in branches]
-        for branch in branches:
-            if not (
-                m := re.match(
-                    r"remotes/origin/fc\-([0-9]{2}.[0-9]{2})-production", branch
+        FC_NIXOS.ensure_repo()
+        versions = set(
+            [
+                m.groups()[0]
+                for m in FC_NIXOS.match_branches(
+                    r"remotes/origin/fc\-([0-9]{2}.[0-9]{2})-production"
                 )
-            ):
-                continue
-            versions.add(m.groups()[0])
-        versions = list(versions)
-        versions.sort()
+            ]
+        )
         progress.update(task, total=len(versions))
         # Now, check every version/branch for changes
         for version in versions:
@@ -155,7 +155,8 @@ def start(
     # Produce the checklist to
 
     print(
-        "Please copy the following markdown snippets to the checklist of the release ticket."
+        "Please copy the following markdown snippets to the checklist of "
+        "the release ticket."
     )
     print()
 
@@ -194,14 +195,14 @@ def status(state: State, header: bool = True):
         if branches := state.get("branches"):
             table = Table()
             table.add_column(
-                "NixOS release", justify="right", style="bold white"
+                "NixOS release", justify="right", style="bold cyan"
             )
             table.add_column("Status")
             for k, v in branches.items():
                 test_state = (
                     "[green]tested[/green]"
                     if "tested" in v
-                    else "[yellow]untested[/yellow]"
+                    else "[red]untested[/red]"
                 )
                 table.add_row(k, test_state)
             print(table)

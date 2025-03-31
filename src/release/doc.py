@@ -4,11 +4,11 @@ import subprocess
 
 from rich import print
 
+from .git import FC_DOCS
 from .markdown import MarkdownTree
 from .state import STAGE, State
-from .utils import FC_DOCS, checkout, ensure_repo, git
 
-FRAGMENTS_DIR = FC_DOCS / "changelog.d"
+FRAGMENTS_DIR = FC_DOCS.path / "changelog.d"
 
 RELEASE_INDEX_TEMPLATE = """\
 # {year}
@@ -60,8 +60,7 @@ def update_index(year: str) -> None:
     )
     release_index_file.write_text(release_index_content)
 
-    git(
-        FC_DOCS,
+    FC_DOCS._git(
         "add",
         str(release_index_file.relative_to(FC_DOCS)),
         str(year_index_file.relative_to(FC_DOCS)),
@@ -69,12 +68,12 @@ def update_index(year: str) -> None:
 
 
 def next_release_id(date: datetime.date) -> str:
-    ensure_repo(FC_DOCS, "git@github.com:flyingcircusio/doc.git")
-    checkout(FC_DOCS, "master", reset=True, clean=True)
+    FC_DOCS.ensure_repo()
+    FC_DOCS.checkout("master", reset=True, clean=True)
 
     years = sorted(
         int(e.name)
-        for e in FC_DOCS.glob("src/changes/*")
+        for e in FC_DOCS.path.glob("src/changes/*")
         if e.is_dir() and e.name.isdigit()
     )
     if not years or years[-1] != date.year:
@@ -82,7 +81,7 @@ def next_release_id(date: datetime.date) -> str:
 
     releases = [
         e.name.removesuffix(".md").removeprefix("r")
-        for e in FC_DOCS.glob(f"src/changes/{years[-1]}/r*.md")
+        for e in FC_DOCS.path.glob(f"src/changes/{years[-1]}/r*.md")
         if e.is_file()
     ]
     releases = sorted(int(r) for r in releases if r.isdigit())
@@ -131,8 +130,8 @@ def main(state: State):
         "This will release the changelog for the following versions: "
         + ", ".join(branches)
     )
-    ensure_repo(FC_DOCS, "git@github.com:flyingcircusio/doc.git")
-    checkout(FC_DOCS, "master", reset=True, clean=True)
+    FC_DOCS.enure_repo()
+    FC_DOCS.checkout("master", reset=True, clean=True)
 
     print("Review open/merged PRs:")
     try:
@@ -153,11 +152,11 @@ def main(state: State):
     update_index(year)
 
     logging.info("Committing changes")
-    git(FC_DOCS, "add", str(new_file.relative_to(FC_DOCS)))
-    git(FC_DOCS, "commit", "-m", f"add changelog {state['release_id']}")
+    FC_DOCS._git("add", str(new_file.relative_to(FC_DOCS)))
+    FC_DOCS._git("commit", "-m", f"add changelog {state['release_id']}")
 
     input("Press enter to push")
-    git(FC_DOCS, "push", "origin", "master")
+    FC_DOCS._git("push", "origin", "master")
 
     state["changelog_url"] = (
         f"https://doc.flyingcircus.io/platform/changes/{year}/r{release_num}.html"
