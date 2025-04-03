@@ -19,11 +19,10 @@ Manual merges work by pushing manually in the nixpkgs integration branch and run
 import datetime
 import logging
 import os
-import sys
+import subprocess
 from dataclasses import dataclass
 from os import path
 from pathlib import Path
-from subprocess import check_output
 from textwrap import dedent
 
 from git import Commit, Repo
@@ -133,7 +132,7 @@ def rebase_nixpkgs(
             logging.exception("nixpkgs rebase failed")
             matrix_hookshot.send_notification(
                 f"""\
-update-nixpkgs: ERROR nixpkgs rebase failed for {branch_to_rebase}. Please resolve the conflict manually with the following commands:
+update-nixpkgs: ERROR nixpkgs rebase failed for `{branch_to_rebase}`. Please resolve the conflict manually with the following commands:
 
 ```
 cd nixpkgs
@@ -143,9 +142,10 @@ git checkout -b {integration_branch} origin/{branch_to_rebase}
 git rebase upstream/{branch_to_rebase}
 git push origin {integration_branch}
 ```
+And run the action (https://github.com/flyingcircusio/fc-nixos-release-tools/actions/workflows/update-nixpkgs.yaml) afterwards.
 """
             )
-            sys.exit(1)
+            return None
 
         # Check if there are new commits compared to the last day's integration branch.
         if f"origin/{last_day_integration_branch}" in nixpkgs_repo.refs:
@@ -177,6 +177,7 @@ def update_fc_nixos(
     integration_branch: str,
     previous_hex_sha: str,
     new_hex_sha: str,
+    matrix_hookshot: MatrixHookshot,
 ):
     logging.info("Update fc-nixos.")
     original_workdir = Path.cwd()
@@ -190,18 +191,46 @@ def update_fc_nixos(
     else:
         repo.git.checkout(integration_branch)
 
-    check_output(
-        [
-            "nix",
-            "flake",
-            "lock",
-            "--override-input",
-            "nixpkgs",
-            f"github:{NIXPKGS_REPO}/{new_hex_sha}",
-        ]
-    )
-    check_output(["nix", "run", ".#buildVersionsJson"]).decode("utf-8")
-    check_output(["nix", "run", ".#buildPackageVersionsJson"]).decode("utf-8")
+    try:
+        subprocess.run(
+            [
+                "nix",
+                "flake",
+                "lock",
+                "--override-input",
+                "nixpkgs",
+                f"github:{NIXPKGS_REPO}/{new_hex_sha}",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        subprocess.run(
+            ["nix", "run", ".#buildVersionsJson"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        subprocess.run(
+            ["nix", "run", ".#buildPackageVersionsJson"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as e:
+        matrix_hookshot.send_notification(
+            dedent(
+                f"""\
+            update-nixpkgs: ERROR nix command `{" ".join(e.cmd)}` failed for `{target_branch}`.
+            ```
+            stderr:
+            {e.stderr}
+
+            stdout:
+            {e.stdout}
+            ```"""
+            )
+        )
 
     repo.git.add(
         [
@@ -309,6 +338,7 @@ def run(
                 integration_branch,
                 result.fork_commit.hexsha,
                 result.fork_after_rebase.hexsha,
+                matrix_hookshot,
             )
             create_fc_nixos_pr(
                 platform_version,
