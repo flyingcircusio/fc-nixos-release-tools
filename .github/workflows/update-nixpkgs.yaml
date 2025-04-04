@@ -47,8 +47,7 @@ jobs:
             --fc-nixos-dir fc-nixos \
             --nixpkgs-dir nixpkgs \
             --nixpkgs-upstream-url https://github.com/NixOS/nixpkgs \
-            --nixpkgs-origin-url https://x-access-token:${{steps.app-token.outputs.token}}@github.com/flyingcircusio/nixpkgs.git \
-            --versions 24.11:nixos-24.11 25.05:nixos-unstable ${{ github.event_name == 'workflow_dispatch' && '--force' || '' }}
+            --nixpkgs-origin-url https://x-access-token:${{steps.app-token.outputs.token}}@github.com/flyingcircusio/nixpkgs.git ${{ github.event_name == 'workflow_dispatch' && '--force' || '' }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           MATRIX_HOOKSHOT_URL: ${{ secrets.MATRIX_HOOKSHOT_URL }}

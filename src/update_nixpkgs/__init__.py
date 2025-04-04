@@ -5,6 +5,8 @@ from logging import INFO, basicConfig
 
 FC_NIXOS_REPO = "flyingcircusio/fc-nixos"
 NIXPKGS_REPO = "flyingcircusio/nixpkgs"
+# Mapping of platform version to nixos branch
+VERSIONS = {"24.11": "nixos-24.11", "25.05": "nixos-unstable"}
 
 
 def main():
@@ -47,12 +49,6 @@ def main():
         "--nixpkgs-origin-url",
         help="URL to push the nixpkgs updates to",
         required=True,
-    )
-    parser_update.add_argument(
-        "--versions",
-        help="Syntax: platform version:upstream branch space-seperated, e.g. 24.11:nixos-24.11 25.05:nixos-unstable",
-        required=True,
-        nargs="+",
     )
     parser_update.add_argument(
         "--force",

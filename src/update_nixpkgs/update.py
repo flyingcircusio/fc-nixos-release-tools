@@ -29,7 +29,7 @@ from git import Commit, Repo
 from git.exc import GitCommandError
 from github import Auth, Github
 
-from update_nixpkgs import FC_NIXOS_REPO, NIXPKGS_REPO
+from update_nixpkgs import FC_NIXOS_REPO, NIXPKGS_REPO, VERSIONS
 from utils.matrix import MatrixHookshot
 
 NIXOS_VERSION_PATH = "release/nixos-version"
@@ -285,7 +285,6 @@ def create_fc_nixos_pr(
 
 
 def run(
-    versions: list[str],
     nixpkgs_upstream_url: str,
     nixpkgs_origin_url: str,
     fc_nixos_dir: str,
@@ -298,8 +297,7 @@ def run(
     today = datetime.date.today().isoformat()
     yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
 
-    for version in versions:
-        platform_version, nixpkgs_target_branch = version.split(":")
+    for platform_version, nixpkgs_target_branch in VERSIONS.items():
         logging.info(f"Updating platform {platform_version}")
         fc_nixos_target_branch = f"fc-{platform_version}-dev"
         integration_branch = (

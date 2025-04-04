@@ -9,14 +9,14 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from logging import info, warning
+from logging import info
 from pathlib import Path
 
-from git import GitCommandError, Repo
+from git import Repo
 from github import Auth, Github
 from github.PullRequest import PullRequest
 
-from update_nixpkgs import FC_NIXOS_REPO, NIXPKGS_REPO
+from update_nixpkgs import FC_NIXOS_REPO, NIXPKGS_REPO, VERSIONS
 from utils.matrix import MatrixHookshot
 
 
@@ -154,7 +154,7 @@ def run(
     fc_nixos_pr = gh.get_repo(FC_NIXOS_REPO).get_pull(int(merged_pr_id))
     pr_platform_version = fc_nixos_pr.base.ref.split("-")[1]
     integration_branch = fc_nixos_pr.head.ref
-    nixpkgs_target_branch = f"nixos-{pr_platform_version}"
+    nixpkgs_target_branch = VERSIONS[pr_platform_version]
     matrix_hookshot = MatrixHookshot(matrix_hookshot_url)
 
     remotes = {
