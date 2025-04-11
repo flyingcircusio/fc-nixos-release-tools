@@ -7,3 +7,5 @@ result
 
 # don't regularly check in the release state
 /state.json
+.DS_Store
+commands.log
