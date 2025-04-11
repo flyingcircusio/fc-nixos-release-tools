@@ -1,12 +1,13 @@
 import datetime
-import logging
-import subprocess
 
 from rich import print
+from rich.markdown import Markdown
+from rich.prompt import Confirm, Prompt
 
+from .command import Command, step
 from .git import FC_DOCS
 from .markdown import MarkdownTree
-from .state import STAGE, State
+from .utils import trigger_doc_update
 
 FRAGMENTS_DIR = FC_DOCS.path / "changelog.d"
 
@@ -40,19 +41,21 @@ infrastructure in reverse chronological order.
 
 
 def update_index(year: str) -> None:
-    year_index_file = FC_DOCS / "src/changes/index.md"
+    year_index_file = FC_DOCS.path / "src/changes/index.md"
     years = [
-        e.name + "/index" for e in FC_DOCS.glob("src/changes/*") if e.is_dir()
+        e.name + "/index"
+        for e in FC_DOCS.path.glob("src/changes/*")
+        if e.is_dir()
     ]
     year_index_content = YEAR_INDEX_TEMPLATE.format(
         years="\n".join(sorted(years, reverse=True))
     )
     year_index_file.write_text(year_index_content)
 
-    release_index_file = FC_DOCS / f"src/changes/{year}/index.md"
+    release_index_file = FC_DOCS.path / f"src/changes/{year}/index.md"
     releases = [
         e.name.removesuffix(".md")
-        for e in FC_DOCS.glob(f"src/changes/{year}/r*.md")
+        for e in FC_DOCS.path.glob(f"src/changes/{year}/r*.md")
         if e.is_file()
     ]
     release_index_content = RELEASE_INDEX_TEMPLATE.format(
@@ -62,8 +65,8 @@ def update_index(year: str) -> None:
 
     FC_DOCS._git(
         "add",
-        str(release_index_file.relative_to(FC_DOCS)),
-        str(year_index_file.relative_to(FC_DOCS)),
+        str(release_index_file.relative_to(FC_DOCS.path)),
+        str(year_index_file.relative_to(FC_DOCS.path)),
     )
 
 
@@ -90,75 +93,108 @@ def next_release_id(date: datetime.date) -> str:
     return f"{years[-1]}_{releases[-1] + 1:03}"
 
 
-def collect_changelogs(state: State) -> MarkdownTree:
+def collect_changelogs(release) -> MarkdownTree:
     changelog = MarkdownTree.from_sections(
         "Impact",
-        *(f"NixOS {k} platform" for k in sorted(state["branches"])),
+        *(f"NixOS {k} platform" for k in sorted(release.branches)),
         "Documentation",
         "Detailed Changes",
     )
-    for k, v in sorted(state["branches"].items()):
-        frag = MarkdownTree.from_str(v.get("changelog", ""))
-        frag["Impact"].add_header(k)
-        frag.rename("NixOS XX.XX platform", f"NixOS {k} platform")
+    for _, branch in sorted(release.branches.items()):
+        frag = MarkdownTree.from_str(branch.changelog)
+        frag["Impact"].add_header(branch.nixos_version)
+        frag.rename(
+            "NixOS XX.XX platform", f"NixOS {branch.nixos_version} platform"
+        )
         if frag["Detailed Changes"].entries:
-            frag["Detailed Changes"] = f"- NixOS {k}: " + ", ".join(
-                e.removeprefix("- ") for e in frag["Detailed Changes"].entries
+            frag["Detailed Changes"] = (
+                f"- NixOS {branch.nixos_version}: "
+                + ", ".join(
+                    e.removeprefix("- ")
+                    for e in frag["Detailed Changes"].entries
+                )
             )
         changelog |= frag
     changelog["Documentation"] += "<!--\nadd entries if necessary\n-->"
     changelog.move_to_end("Detailed Changes")
-    changelog.add_header(
-        f"Release {state['release_id']} ({state['release_date']})"
-    )
+    changelog.add_header(f"Release {release.id} ({release.date.isoformat()})")
     changelog.entries.insert(
-        0, f"---\nPublish Date: '{state['release_date']}'\n---"
+        0, f"---\nPublish Date: '{release.date.isoformat()}'\n---"
     )
-    input("Press enter to open the new changelog")
-    changelog.open_in_editor()
-    changelog.strip()
+
+    print(Markdown(changelog.to_str()))
+    print()
+
+    while (
+        Prompt.ask(
+            "Do you want to [green]edit[/green] the changelog or [green]continue[/green]?",
+            choices=["edit", "continue"],
+        )
+        == "edit"
+    ):
+        changelog.open_in_editor()
+        print(Markdown(changelog.to_str()))
+        print()
+
     return changelog
 
 
-def main(state: State):
-    for k, v in state["branches"].items():
-        if "tested" not in v:
-            logging.error(f"'{k}' is not tested")
-            return
-    branches = state["branches"].keys()
-    logging.info(
-        "This will release the changelog for the following versions: "
-        + ", ".join(branches)
-    )
-    FC_DOCS.enure_repo()
-    FC_DOCS.checkout("master", reset=True, clean=True)
+class Doc(Command):
+    """Finalize the documentation for this release"""
 
-    print("Review open/merged PRs:")
-    try:
-        subprocess.run(
-            ["gh", "pr", "list", "--state=all", "-B", "master"],
-            cwd=FC_DOCS,
+    @step(skip_seen=False)
+    def docs(self):
+        """Verify all branches are marked as tested"""
+        branches = list(self.release.branches)
+        print(
+            "This will release the changelog for the following versions: "
+            + ", ".join(branches)
         )
-    except FileNotFoundError:
-        logging.error("'gh' is not available. Please check PRs manually")
 
-    year, release_num = state["release_id"].split("_", maxsplit=1)
-    new_file = FC_DOCS.joinpath(f"src/changes/{year}/r{release_num}.md")
+        for branch in self.release.branches.values():
+            if not branch.tested:
+                print(f"[red]'{branch.nixos_version}' is not tested")
+                raise RuntimeError()
 
-    changelog = collect_changelogs(state)
-    new_file.parent.mkdir(exist_ok=True)
-    new_file.write_text(changelog.to_str())
+    @step(skip_seen=False)
+    def fetch_repo(self):
+        """Update documentation repository"""
+        FC_DOCS.ensure_repo()
+        FC_DOCS.checkout("master", reset=True, clean=True)
 
-    update_index(year)
+    @step
+    def collect_changelogs(self):
+        """Collect changelogs from all branches and update index"""
+        changelog = collect_changelogs(self.release)
 
-    logging.info("Committing changes")
-    FC_DOCS._git("add", str(new_file.relative_to(FC_DOCS)))
-    FC_DOCS._git("commit", "-m", f"add changelog {state['release_id']}")
+        new_file = (
+            FC_DOCS.path
+            / f"src/changes/{self.release.year}/r{self.release.release_num}.md"
+        )
+        new_file.parent.mkdir(exist_ok=True)
+        new_file.write_text(changelog.to_str())
 
-    input("Press enter to push")
-    FC_DOCS._git("push", "origin", "master")
+        update_index(self.release.year)
 
-    state["changelog_url"] = (
-        f"https://doc.flyingcircus.io/platform/changes/{year}/r{release_num}.html"
-    )
-    state["stage"] = STAGE.TAG
+        FC_DOCS._git("add", str(new_file.relative_to(FC_DOCS.path)))
+        FC_DOCS._git("commit", "-m", f"add changelog {self.release.id}")
+
+    @step
+    def push(self):
+        """Push changes"""
+        # FC_DOCS._git("push", "origin", "master")
+        print("Changes have been pushed.")
+
+    @step
+    def trigger_changelog_update(self):
+        """Update documentation on website"""
+        trigger_doc_update()
+
+        print(
+            f" > The changelogs are available at {self.release.changelog_url}"
+        )
+        print()
+        while not Confirm.ask(
+            "[purple]Have you spot-checked the changelog for proper rendering?"
+        ):
+            pass

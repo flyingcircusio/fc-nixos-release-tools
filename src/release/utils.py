@@ -58,6 +58,62 @@ def prompt(
             )
 
 
+def git_tty(path: Path, *cmd: str, check=True, **kw):
+    return subprocess.run(["git"] + list(cmd), cwd=path, check=check, **kw)
+
+
+def git(path: Path, *cmd: str, **kw):
+    return subprocess.check_output(
+        ["git"] + list(cmd), cwd=path, text=True, **kw
+    )
+
+
+def rev_parse(path: Path, rev: str):
+    return git(path, "rev-parse", "--verify", rev).strip()
+
+
+def load_json(path: Path, rev: str, obj_path: str):
+    return json.loads(git(path, "show", rev + ":" + obj_path))
+
+
+def git_remote(path: Path):
+    out = git(path, "remote", "-v")
+    return re.findall(r"^origin\s(.+?)\s\(.+\)$", out, re.MULTILINE)
+
+
+def ensure_repo(path: Path, url: str, *fetch_args: str):
+    if not path.exists():
+        path.mkdir(parents=True)
+        git(path, "init")
+    if (remotes := set(git_remote(path))) != {url}:
+        if remotes:
+            try:
+                git(path, "remote", "rm", "origin")
+            except subprocess.SubprocessError:
+                pass
+        git(path, "remote", "add", "origin", url)
+    git(
+        path,
+        "fetch",
+        "origin",
+        "--tags",
+        "--prune",
+        "--prune-tags",
+        "--force",
+        *fetch_args,
+    )
+
+
+def checkout(path: Path, branch: str, reset: bool = False, clean: bool = False):
+    if reset:
+        git(path, "checkout", "-q", "-f", branch)
+        git(path, "reset", "-q", "--hard", f"origin/{branch}")
+    else:
+        git(path, "checkout", "-q", branch)
+    if clean:
+        git(path, "clean", "-d", "--force")
+
+
 def machine_prefix(nixos_version: str):
     return "release" + nixos_version.replace(".", "")
 
@@ -116,6 +172,24 @@ def trigger_rolling_release_update():
                 "systemctl",
                 "start",
                 "update_rolling_releases",
+            ]
+        )
+        progress.update(task, total=1, advance=1)
+
+
+def trigger_doc_update():
+    with Progress(transient=True) as progress:
+        task = progress.add_task(
+            "Triggering documentation update for the website ..."
+        )
+        subprocess.run(
+            [
+                "ssh",
+                "doc.flyingcircus.io",
+                "sudo",
+                "systemctl",
+                "start",
+                "update-platformdoc.service",
             ]
         )
         progress.update(task, total=1, advance=1)
@@ -185,11 +259,8 @@ def get_remote_nix_name(machine: str):
 
 
 def verify_machines_are_current(prefix, nix_name):
-    print()
-    print("[bold white]Verifying test machines[/bold white]")
-    print()
     print(
-        f"    > Expecting the system's nix_name to be [bold white]{nix_name}[/bold white]"
+        f"    > Expecting the system's nix_name to be [bold purple]{nix_name}[/bold purple]"
     )
     print()
 
@@ -205,7 +276,7 @@ def verify_machines_are_current(prefix, nix_name):
                 socket.getaddrinfo(machine, 80)
                 known_machines.append(machine)
                 print(
-                    f"    > Found machine [bold white]{machine}[/bold white]."
+                    f"    > Found machine [bold purple]{machine}[/bold purple]."
                 )
             except socket.gaierror:
                 pass
@@ -220,7 +291,7 @@ def verify_machines_are_current(prefix, nix_name):
 
     for machine in known_machines:
         print(
-            f"Validating whether [bold white]{machine}[/bold white] has switched successfully ..."
+            f"Validating whether [bold purple]{machine}[/bold purple] has switched successfully ..."
         )
         remote_nix_name = get_remote_nix_name(machine)
         if remote_nix_name != nix_name:
@@ -232,12 +303,12 @@ def verify_machines_are_current(prefix, nix_name):
         remote_nix_name = get_remote_nix_name(machine)
         if remote_nix_name != nix_name:
             print(
-                f"[bold white]{machine}[/bold white] switched [red]not successful[/red]."
+                f"[bold purple]{machine}[/bold purple] switched [red]not successful[/red]."
             )
             raise RuntimeError(f"Switch on {machine} not successful.")
 
         print(
-            f"[bold white]{machine}[/bold white] switched [green]successfully[/green]."
+            f"[bold purple]{machine}[/bold purple] switched [green]successfully[/green]."
         )
         print()
 
