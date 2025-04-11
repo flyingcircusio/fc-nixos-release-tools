@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/usr/bin/env nix-shell
+#! nix-shell -i bash -p uv -p gh
 set -e
-nix build
-./result/bin/release $@
+uv run --frozen release $@
