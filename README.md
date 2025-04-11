@@ -27,3 +27,24 @@ Example usage:
 ./result/bin/release doc
 ./result/bin/release tag
 ```
+
+## Hacking
+
+
+### Colors
+
+I've reviewed some advise on colours and ended up with this, to ensure light/dark mode compatibility:
+
+Good choices:
+
+* neutral (+bold)
+* red (+bold)
+* blue (+bold)
+* purple (+bold)
+
+Acceptable choices:
+
+* green (-bold)
+* cyan (+bold)
+
+All others should be avoided.
