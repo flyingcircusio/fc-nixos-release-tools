@@ -9,7 +9,10 @@ jobs:
   run-auto-merge:
     runs-on: ubuntu-latest
     steps:
+      # LOCK to commit because of tooling change
       - uses: actions/checkout@v4
+        with:
+          ref: 080ed06be3d7d7d305812a109621520a070868ce
       - uses: cachix/install-nix-action@v21
       - uses: actions/create-github-app-token@v1
         id: app-token

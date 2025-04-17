@@ -9,9 +9,11 @@ jobs:
   run-nixpkgs-update:
     runs-on: ubuntu-latest
     steps:
+      # Lock because of tooling change
       - uses: actions/checkout@v4
         with:
           path: 'release-tools'
+          ref: 080ed06be3d7d7d305812a109621520a070868ce
       - uses: cachix/install-nix-action@v21
         with:
           # Nix 2.24 breaks flake update
