@@ -182,7 +182,7 @@ class Doc(Command):
     @step
     def push(self):
         """Push changes"""
-        # FC_DOCS._git("push", "origin", "master")
+        FC_DOCS._git("push", "origin", "master")
         print("Changes have been pushed.")
 
     @step

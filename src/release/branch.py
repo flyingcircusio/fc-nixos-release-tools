@@ -11,7 +11,7 @@ from rich.prompt import Confirm, Prompt
 from .command import Command, step
 from .git import FC_NIXOS
 from .markdown import MarkdownTree
-from .release import Release
+from .state import Release
 from .utils import (
     machine_prefix,
     trigger_rolling_release_update,
@@ -90,6 +90,7 @@ class Branch(Command):
     @step
     def review_staging_prod_changes(self):
         """Spot-check changes"""
+        FC_NIXOS.pull()
         print(
             f"The following commits will be merged from "
             f"[cyan]{self.branch.branch_stag}[/cyan] to "
@@ -145,14 +146,14 @@ class Branch(Command):
         self.branch.changelog = (old_changelog | new_fragment).to_str()
 
         new_fragment.strip()
-        new_fragment.add_header(f"Release {self.release_id}")
+        new_fragment.add_header(f"Release {self.release.id}")
         new_changelog = new_fragment.to_str()
         if CHANGELOG.exists():
             new_changelog += "\n" + CHANGELOG.read_text()
         CHANGELOG.write_text(new_changelog)
 
         try:
-            FC_NIXOS._git("add", str(CHANGELOG.relative_to(FC_NIXOS)))
+            FC_NIXOS._git("add", str(CHANGELOG.relative_to(FC_NIXOS.path)))
             FC_NIXOS._git("commit", "-m", "Collect changelog fragments")
         except subprocess.CalledProcessError:
             logging.error(
@@ -180,14 +181,14 @@ class Branch(Command):
         )
         FC_NIXOS._git("merge", "-m", msg, self.branch.branch_stag)
         self.branch.new_production_commit = FC_NIXOS.rev_parse(
-            FC_NIXOS, self.branch.branch_prod
+            self.branch.branch_prod
         )
 
     @step(skip_seen=False)
     def backmerge(self):
         """Backmerge production to dev."""
         FC_NIXOS.checkout(self.branch.branch_dev)
-        msg = f"Backmerge branch '{self.branch.branch_prod}' into '{self.branch.branch_dev}'' for release {self.release_id}"
+        msg = f"Backmerge branch '{self.branch.branch_prod}' into '{self.branch.branch_dev}'' for release {self.release.id}"
         FC_NIXOS._git("merge", "-m", msg, self.branch.branch_prod)
 
     @step
@@ -196,7 +197,7 @@ class Branch(Command):
         old_rev = FC_NIXOS.rev_parse("origin/" + self.branch.branch_prod)
         new_rev = FC_NIXOS.rev_parse(self.branch.branch_prod)
 
-        new_fragment = MarkdownTree.from_str(self.release.changelog)
+        new_fragment = MarkdownTree.from_str(self.branch.changelog)
         new_fragment |= generate_nixpkgs_changelog(old_rev, new_rev)
 
         print(Markdown(new_fragment.to_str()))
@@ -238,7 +239,7 @@ class Branch(Command):
         self.production_build = wait_for_successful_hydra_release_build(
             self.branch.branch_prod, prod_rev
         )
-        self.branch.hydra_eval_id = self.production_build.eval_id
+        self.branch.hydra_eval_id = str(self.production_build.eval_id)
         print(
             f"[green]Detected green build [cyan]{self.branch.hydra_eval_id}[/cyan] on Hydra.[/green]"
         )
@@ -246,7 +247,7 @@ class Branch(Command):
     @step
     def create_directory_release(self):
         """Create directory release."""
-        print("Create directory release for {self.branch.branch_prod}")
+        print(f"Create directory release for {self.branch.branch_prod}")
         print()
         print(" > https://directory.fcio.net/environments")
 
@@ -269,14 +270,14 @@ class Branch(Command):
             f"{prefix}prod", self.production_build.nix_name
         )
         print(
-            "Check maintenance log, check switch output for unexpected service restarts, compare with changelog, impact properly documented? [Enter to edit]"
+            "Check maintenance log, check switch output for unexpected service restarts, compare with changelog, impact properly documented? You can edit the changelog in the next step."
         )
         while not Confirm.ask("Ready to continue?"):
             pass
 
     @step
     def update_changelog_with_urls(self):
-        """Update global chnange."""
+        """Update global changelog."""
         metadata_url = f"https://my.flyingcircus.io/releases/metadata/fc-{self.branch.nixos_version}-production/{self.release.id}"
         changelog = MarkdownTree.from_str(self.branch.changelog)
         changelog["Detailed Changes"] += f"- [metadata]({metadata_url})"
@@ -293,18 +294,20 @@ class Branch(Command):
         changelog.open_in_editor()
         self.branch.changelog = changelog.to_str()
 
+        # XXX
+        while not Confirm.ask(
+            "[purple]Have you spot-checked the changelog for proper rendering?"
+        ):
+            pass
+
     @step
     def mark_keep(self):
         """Mark [cyan]release[/cyan] job to keep indefinitely."""
 
         print(
-            " > The job is reachable here: https://hydra.flyingcircus.io/eval/{self.release.hydra_eval_id}?filter=release"
+            f" > The job is reachable here: https://hydra.flyingcircus.io/eval/{self.release.hydra_eval_id}?filter=release"
         )
         print()
-        while not Confirm.ask(
-            "[purple]Have you spot-checked the changelog for proper rendering?"
-        ):
-            pass
 
     @step
     def mark_as_tested(self):

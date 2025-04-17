@@ -16,7 +16,7 @@ from .branch import Branch
 from .command import Command, step
 from .doc import Doc, next_release_id
 from .git import FC_NIXOS
-from .release import Release
+from .state import Release
 from .utils import prompt
 
 N_A = "[i]n/a[/i]"
@@ -57,30 +57,31 @@ class Start(Command):
     """[bold purple]Start a new release."""
 
     CHECKLIST_VERSION = """
-    ## NixOS {version}
+## NixOS {version}
 
-    - [ ] Use `./release branch {version}` to process this branch.
+- [ ] Use `./release branch {version}` to process this branch.
     """
 
     CHECKLIST_FOOTER = """
 
-    ## Documentation and announcement
+## Documentation and announcement
 
-    - [ ] `./release doc` to finalize documentation
+- [ ] `./release doc` to finalize documentation
 
-    - [ ] Announcements
+- [ ] Announcements
 
-      - [ ] [Create maintenance status page](https://manage.statuspage.io/pages/vk1n4gx65z5k/incidents/new-scheduled-maintenance)
-        - [ ] only enable notifications for creating the maintenance, don't remind about progress
-        - [ ] don't automate component status
+  - [ ] [Create maintenance status page](https://manage.statuspage.io/pages/vk1n4gx65z5k/incidents/new-scheduled-maintenance)
+    - [ ] only enable notifications for creating the maintenance, don't remind about progress
+    - [ ] don't automate component status
+    - [ ] do automate progress (open/resolve)
 
-      - [ ] Announce release in Matrix (room General) and link to change log
+  - [ ] Announce release in Matrix (room General) and link to change log
 
-    ## Shortly before release ({release_date} 20:45 Europe/Berlin)
+## Shortly before release ({release_date} 20:45 Europe/Berlin)
 
-    - [ ] double-check that production environments are set up correctly as documented in `./release status`
+- [ ] double-check that production environments are set up correctly as documented in `./release status`
 
-    - [ ] Copy output from `./release status` into a comment of this issue.
+- [ ] Copy output from `./release status` into a comment of this issue.
 
     """
 

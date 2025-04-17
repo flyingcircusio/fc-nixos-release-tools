@@ -74,6 +74,9 @@ class GitRepo:
             "--force",
         )
 
+    def pull(self):
+        self._git("pull")
+
     def checkout(self, branch: str, reset: bool = False, clean: bool = False):
         if reset:
             self._git("checkout", "-q", "-f", branch)

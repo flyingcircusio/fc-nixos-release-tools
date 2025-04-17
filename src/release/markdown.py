@@ -99,7 +99,7 @@ class MarkdownTree:
             res |= cls.from_str(f.read_text())
             f.unlink()
             if git_repo:
-                git_repo._git("add", str(f.relative_to(git_repo)))
+                git_repo._git("add", str(f.relative_to(git_repo.path)))
         return res
 
     def strip(self) -> None:
