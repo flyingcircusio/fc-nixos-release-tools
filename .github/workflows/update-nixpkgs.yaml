@@ -9,15 +9,12 @@ jobs:
   run-nixpkgs-update:
     runs-on: ubuntu-latest
     steps:
-      # Lock because of tooling change
       - uses: actions/checkout@v4
         with:
           path: 'release-tools'
-          ref: 080ed06be3d7d7d305812a109621520a070868ce
-      - uses: cachix/install-nix-action@v21
-        with:
-          # Nix 2.24 breaks flake update
-          install_url: https://releases.nixos.org/nix/nix-2.18.9/install
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - uses: cachix/install-nix-action@v31.2.0
       - uses: actions/create-github-app-token@v1
         id: app-token
         with:
@@ -41,11 +38,8 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           # fetch all branches and tags
           fetch-depth: 0
-      - name: build release tooling
-        run: |
-          nix build ./release-tools#
       - run: |
-          ./result/bin/update-nixpkgs update \
+          uv --project release-tools run --frozen update-nixpkgs update \
             --fc-nixos-dir fc-nixos \
             --nixpkgs-dir nixpkgs \
             --nixpkgs-upstream-url https://github.com/NixOS/nixpkgs \
