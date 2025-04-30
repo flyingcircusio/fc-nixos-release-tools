@@ -77,12 +77,6 @@ class Start(Command):
 
   - [ ] Announce release in Matrix (room General) and link to change log
 
-## Shortly before release ({release_date} 20:45 Europe/Berlin)
-
-- [ ] double-check that production environments are set up correctly as documented in `./release status`
-
-- [ ] Copy output from `./release status` into a comment of this issue.
-
     """
 
     @step(skip_seen=False)

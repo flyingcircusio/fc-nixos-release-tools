@@ -85,6 +85,7 @@ class GitRepo:
             self._git("checkout", "-q", branch)
         if clean:
             self._git("clean", "-d", "--force")
+        self._git("branch", f"--set-upstream-to=origin/{branch}")
 
     def is_ancestor(self, a, b):
         code, _ = self._git_raw("merge-base", "--is-ancestor", a, b)

@@ -170,6 +170,7 @@ def trigger_rolling_release_update():
         subprocess.run(
             [
                 "ssh",
+                "-6",
                 "services59",
                 "sudo",
                 "systemctl",
@@ -323,25 +324,24 @@ def verify_machines_are_current(prefix, nix_name):
         print()
 
 
-def wait_for_vm_reboot(machine: str):
-    with Progress(transient=True) as progress:
-        task = progress.add_task(f"Waiting for reboot of {machine}", total=None)
+def wait_for_vm_reboot(machine: str, progress):
+    task = progress.add_task(f"Waiting for reboot of {machine}", total=None)
 
-        while not progress.finished:
-            out = subprocess.run(
-                ["ping", "-c", "-1", machine], check=True, capture_output=True
-            )
-            if out.returncode != 0:
-                time.sleep(1)
-                continue
-            # Just a connection test
-            out = subprocess.run(
-                ["ssh", machine, "echo"], check=True, capture_output=True
-            )
-            if out.returncode != 0:
-                time.sleep(1)
-                continue
-            progress.update(task, total=1, advance=1)
+    while not progress.finished:
+        out = subprocess.run(
+            ["ping6", "-c", "1", machine], check=True, capture_output=True
+        )
+        if out.returncode != 0:
+            time.sleep(1)
+            continue
+        # Just a connection test
+        out = subprocess.run(
+            ["ssh", "-6", machine, "echo"], check=True, capture_output=True
+        )
+        if out.returncode != 0:
+            time.sleep(1)
+            continue
+        progress.update(task, total=1, advance=1)
 
 
 def run_maintenance_switch_on_vm(machine: str):
@@ -367,15 +367,18 @@ def run_maintenance_switch_on_vm(machine: str):
             except subprocess.CalledProcessError as e:
                 stdout = e.stdout.decode("utf-8")
                 stderr = e.stderr.decode("utf-8")
-                if "maintenance-reboot" in stdout:
-                    wait_for_vm_reboot(machine)
-                    pass
-                print(
-                    f"Staging: [red]Switching {machine} failed with code {e.returncode}!",
-                )
-                print("STDOUT:", stdout)
-                print("STDERR:", stderr)
-                raise
+                if (
+                    "maintenance-reboot" in stdout
+                    or "maintenance-reboot" in stderr
+                ):
+                    wait_for_vm_reboot(machine, progress)
+                else:
+                    print(
+                        f"Staging: [red]Switching {machine} failed with code {e.returncode}!",
+                    )
+                    print("STDOUT:", stdout)
+                    print("STDERR:", stderr)
+                    raise
             progress.update(task, advance=1)
 
 
