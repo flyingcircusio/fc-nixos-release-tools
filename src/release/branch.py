@@ -219,7 +219,7 @@ class Branch(Command):
     @step(skip_seen=False)
     def push(self):
         """Push repository."""
-        remote = FC_NIXOS._git("remote", "get-url", "--push", "origin")
+        remote = FC_NIXOS._git("remote", "get-url", "--push", "origin").strip()
         print(f"[bold purple]Pushing changes to [green]{remote}[/green] ...")
 
         FC_NIXOS._git(
@@ -305,9 +305,13 @@ class Branch(Command):
         """Mark [cyan]release[/cyan] job to keep indefinitely."""
 
         print(
-            f" > The job is reachable here: https://hydra.flyingcircus.io/eval/{self.release.hydra_eval_id}?filter=release"
+            f" > The job is reachable here: https://hydra.flyingcircus.io/eval/{self.branch.hydra_eval_id}?filter=release"
         )
         print()
+        while not Confirm.ask(
+            "[purple]Have you set the `keep` flag for this job?"
+        ):
+            pass
 
     @step
     def mark_as_tested(self):

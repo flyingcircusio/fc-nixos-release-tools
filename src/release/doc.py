@@ -7,7 +7,7 @@ from rich.prompt import Confirm, Prompt
 from .command import Command, step
 from .git import FC_DOCS
 from .markdown import MarkdownTree
-from .utils import trigger_doc_update
+from .utils import trigger_doc_update, wait_for_successful_hydra_build
 
 FRAGMENTS_DIR = FC_DOCS.path / "changelog.d"
 
@@ -188,6 +188,8 @@ class Doc(Command):
     @step
     def trigger_changelog_update(self):
         """Update documentation on website"""
+        commit_hash = FC_DOCS.rev_parse("master")
+        wait_for_successful_hydra_build("doc", commit_hash, "platformDoc")
         trigger_doc_update()
 
         print(

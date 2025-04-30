@@ -23,7 +23,7 @@ WORK_DIR = Path("work")
 TEMP_CHANGELOG = WORK_DIR / "temp_changelog.md"
 HYDRA_URL = "https://hydra.flyingcircus.io"
 HYDRA_EVALS_URL = f"{HYDRA_URL}/jobset/flyingcircus/{{branch}}/evals"
-HYDRA_RELEASE_BUILD_URL = f"{HYDRA_URL}/eval/{{eval_id}}/job/release"
+HYDRA_RELEASE_BUILD_URL = f"{HYDRA_URL}/eval/{{eval_id}}/job/{{job}}"
 
 
 def prompt(
@@ -135,19 +135,22 @@ def get_hydra_eval_id_for_commit(branch: str, commit_hash: str):
     try:
         evals = iter_hydra(HYDRA_EVALS_URL.format(branch=branch), "evals")
         for eval in evals:
-            if eval["jobsetevalinputs"]["fc"]["revision"] == commit_hash:
-                return eval["id"]
+            for input in eval["jobsetevalinputs"].values():
+                # Auto-sense whether *any* input has this commit hash. This isn't quite
+                # clean but makes it easier to jump between different repos/jobs/...
+                if input["revision"] == commit_hash:
+                    return eval["id"]
     except Exception as e:
         print("[red]Error fetching hydra evals", e)
         raise RuntimeError("Error fetching hydra evals")
 
 
-def get_hydra_release_build(eval_id: str):
+def get_hydra_build(eval_id: str, job: str):
     """
     Gets the status of the `release` build of the eval with the given branch and commit
     :return: None, when build is still running. Otherwise, status int
     """
-    hydra_build_url = HYDRA_RELEASE_BUILD_URL.format(eval_id=eval_id)
+    hydra_build_url = HYDRA_RELEASE_BUILD_URL.format(eval_id=eval_id, job=job)
     r = requests.get(hydra_build_url, headers={"Accept": "application/json"})
     r.raise_for_status()
     return r.json()
@@ -195,8 +198,16 @@ def trigger_doc_update():
         progress.update(task, total=1, advance=1)
 
 
-def wait_for_successful_hydra_release_build(
-    branch: str, commit_hash: str
+def wait_for_successful_hydra_release_build(branch: str, commit_hash: str):
+    eval_id, build = wait_for_successful_hydra_build(
+        branch, commit_hash, "release"
+    )
+    nix_name = build["nixname"].split("release-")[1]
+    return HydraReleaseBuild(nix_name, eval_id)
+
+
+def wait_for_successful_hydra_build(
+    branch: str, commit_hash: str, job: str
 ) -> HydraReleaseBuild:
     with Progress(transient=True) as progress:
         task = progress.add_task(
@@ -219,23 +230,22 @@ def wait_for_successful_hydra_release_build(
     print()
     with Progress(transient=True) as progress:
         task = progress.add_task(
-            "[red]Waiting for hydra release build to finish...", total=None
+            f"[red]Waiting for hydra job `{job}` build to finish...", total=None
         )
         print(
             "    > You can manually check Hydra build status here: "
-            + HYDRA_RELEASE_BUILD_URL.format(eval_id=eval_id)
+            + HYDRA_RELEASE_BUILD_URL.format(eval_id=eval_id, job=job)
         )
         print()
         while not progress.finished:
-            build = get_hydra_release_build(eval_id)
+            build = get_hydra_build(eval_id, job)
             if build["finished"] != 1:
                 time.sleep(10)
                 continue
 
             if build["buildstatus"] == 0:
                 progress.update(task, total=1, advance=1)
-                nix_name = build["nixname"].split("release-")[1]
-                return HydraReleaseBuild(nix_name, eval_id)
+                return eval_id, build
 
             print(
                 f"[red]Hydra release build for {branch} and commit {commit_hash} is unsuccessful"
