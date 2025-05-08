@@ -294,11 +294,19 @@ class Branch(Command):
         changelog.open_in_editor()
         self.branch.changelog = changelog.to_str()
 
-        # XXX
-        while not Confirm.ask(
-            "[purple]Have you spot-checked the changelog for proper rendering?"
+        print(Markdown(changelog.to_str()))
+        print()
+
+        while (
+            Prompt.ask(
+                "Do you want to [green]edit[/green] the changelog or [green]continue[/green]?",
+                choices=["edit", "continue"],
+            )
+            == "edit"
         ):
-            pass
+            changelog.open_in_editor()
+            print(Markdown(changelog.to_str()))
+            print()
 
     @step
     def mark_keep(self):
