@@ -328,17 +328,17 @@ def wait_for_vm_reboot(machine: str, progress):
     task = progress.add_task(f"Waiting for reboot of {machine}", total=None)
 
     while not progress.finished:
-        out = subprocess.run(
-            ["ping6", "-c", "1", machine], check=True, capture_output=True
+        proc = subprocess.run(
+            ["ping6", "-c", "1", machine], capture_output=True
         )
-        if out.returncode != 0:
+        if proc.returncode != 0:
             time.sleep(1)
             continue
         # Just a connection test
-        out = subprocess.run(
-            ["ssh", "-6", machine, "echo"], check=True, capture_output=True
+        proc = subprocess.run(
+            ["ssh", "-6", machine, "echo"], capture_output=True
         )
-        if out.returncode != 0:
+        if proc.returncode != 0:
             time.sleep(1)
             continue
         progress.update(task, total=1, advance=1)

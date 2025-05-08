@@ -116,13 +116,15 @@ class Start(Command):
                 "Determining platform versions", total=None
             )
             FC_NIXOS.ensure_repo()
-            versions = set(
-                [
-                    m.groups()[0]
-                    for m in FC_NIXOS.match_branches(
-                        r"remotes/origin/fc\-([0-9]{2}.[0-9]{2})-production"
-                    )
-                ]
+            versions = sorted(
+                set(
+                    [
+                        m.groups()[0]
+                        for m in FC_NIXOS.match_branches(
+                            r"remotes/origin/fc\-([0-9]{2}.[0-9]{2})-production"
+                        )
+                    ]
+                )
             )
             progress.update(task, total=len(versions))
             # Now, check every version/branch for changes
