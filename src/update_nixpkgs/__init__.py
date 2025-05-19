@@ -6,7 +6,7 @@ from logging import INFO, basicConfig
 FC_NIXOS_REPO = "flyingcircusio/fc-nixos"
 NIXPKGS_REPO = "flyingcircusio/nixpkgs"
 # Mapping of platform version to nixos branch
-VERSIONS = {"24.11": "nixos-24.11", "25.05": "nixos-unstable"}
+VERSIONS = {"24.11": "nixos-24.11", "25.05": "nixos-25.05"}
 
 
 def main():
