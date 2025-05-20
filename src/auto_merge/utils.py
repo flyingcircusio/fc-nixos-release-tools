@@ -206,3 +206,15 @@ def create_pr_comment(pr: PullRequest, merge_date: datetime.date):
         if comment.body == msg:
             return
     pr.create_issue_comment(msg)
+
+
+def mark_pr_merge_label(pr: PullRequest, mergable: bool):
+    LABEL_NAME = "auto-merge scheduled"
+    auto_merge_label_set = False
+    for label in pr.labels:
+        if label.name == LABEL_NAME:
+            auto_merge_label_set = True
+    if mergable and not auto_merge_label_set:
+        pr.add_to_labels(LABEL_NAME)
+    elif not mergable and auto_merge_label_set:
+        pr.remove_from_labels(LABEL_NAME)

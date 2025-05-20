@@ -22,3 +22,4 @@ def check_pr(pr_id: int, github_access_token: str, config: Config):
     if mergeable:
         merge_date = utils.calculate_merge_date(risk, urgency, config)
         utils.create_pr_comment(pr, merge_date)
+    utils.mark_pr_merge_label(pr, mergeable)

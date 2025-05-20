@@ -24,6 +24,7 @@ def merge_prs(config: Config, gh: Github, github_access_token: str):
         mergeable = utils.check_pr_mergeable(
             repo, pr, github_access_token, config
         )
+        utils.mark_pr_merge_label(pr, mergeable)
         if not mergeable:
             logging.debug(
                 f"PR {pr.number} does not fulfill the merge criteria."
