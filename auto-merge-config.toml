@@ -2,7 +2,7 @@
 # 0 = Monday, 6 = Sunday
 production_merge_day = 3
 # Times are in Europe/Berlin
-platform_versions = ["24.11"]
+platform_versions = ["24.11", "25.05"]
 fc_nixos_repo_name = "flyingcircusio/fc-nixos"
 
 [monitoring_review]
