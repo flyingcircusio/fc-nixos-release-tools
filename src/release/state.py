@@ -28,10 +28,16 @@ class Release(BaseModel):
     def release_num(self):
         return self.id.split("_", maxsplit=1)[1]
 
+    @property
+    def work_branches(self):
+        """Branches that are not to be ignored."""
+        return {k: v for (k, v) in self.branches.items() if not v.ignored}
+
 
 class Branch(BaseModel):
     nixos_version: str
     tested: bool = False
+    ignored: bool = False
     orig_staging_commit: str = ""
     new_production_commit: str = ""
     hydra_eval_id: str = ""

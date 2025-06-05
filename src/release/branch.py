@@ -326,3 +326,23 @@ class Branch(Command):
         """Mark the branch as [green]tested[/green]."""
         self.branch.tested = True
         print("All good, the release for this branch is now done.")
+
+
+class Ignore(Command):
+    def __init__(self, release: Release, nixos_version: str):
+        self.release = release
+        self.nixos_version = nixos_version
+
+    def __call__(self):
+        try:
+            branch = self.release.branches[self.nixos_version]
+        except KeyError:
+            print(
+                f"[red]'branch {self.nixos_version}' was not scheduled for release or is unknown"
+            )
+            raise RuntimeError()
+        else:
+            branch.ignored = True
+            print(
+                f"[cyan]Ignoring [bold]{self.nixos_version}[/bold] during this release cycle."
+            )
