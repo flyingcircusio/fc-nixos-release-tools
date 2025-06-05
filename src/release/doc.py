@@ -96,11 +96,11 @@ def next_release_id(date: datetime.date) -> str:
 def collect_changelogs(release) -> MarkdownTree:
     changelog = MarkdownTree.from_sections(
         "Impact",
-        *(f"NixOS {k} platform" for k in sorted(release.branches)),
+        *(f"NixOS {k} platform" for k in sorted(release.work_branches)),
         "Documentation",
         "Detailed Changes",
     )
-    for _, branch in sorted(release.branches.items()):
+    for _, branch in sorted(release.work_branches.items()):
         frag = MarkdownTree.from_str(branch.changelog)
         frag["Impact"].add_header(branch.nixos_version)
         frag.rename(
@@ -145,13 +145,13 @@ class Doc(Command):
     @step(skip_seen=False)
     def docs(self):
         """Verify all branches are marked as tested"""
-        branches = list(self.release.branches)
+        branches = list(self.release.work_branches)
         print(
             "This will release the changelog for the following versions: "
             + ", ".join(branches)
         )
 
-        for branch in self.release.branches.values():
+        for branch in self.release.work_branches.values():
             if not branch.tested:
                 print(f"[red]'{branch.nixos_version}' is not tested")
                 raise RuntimeError()

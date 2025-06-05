@@ -12,7 +12,7 @@ from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from . import state
-from .branch import Branch
+from .branch import Branch, Ignore
 from .command import Command, step
 from .doc import Doc, next_release_id
 from .git import FC_NIXOS
@@ -186,11 +186,12 @@ class Status(Command):
             table.add_column("Production commit ID")
             table.add_column("Hydra Eval")
             for branch in branches.values():
-                test_state = (
-                    "[green]tested[/green]"
-                    if branch.tested
-                    else "[red]untested[/red]"
-                )
+                if branch.tested:
+                    test_state = "[green]tested[/green]"
+                elif branch.ignored:
+                    test_state = "[grey69]ignored[/grey69]"
+                else:
+                    test_state = "[red]untested[/red]"
                 table.add_row(
                     branch.nixos_version,
                     test_state,
@@ -225,6 +226,13 @@ def main():
         help="Perform the release steps for this specific branch. E.g. `24.11`.",
     )
     branch_parser.set_defaults(command=Branch)
+
+    ignore_parser = subparser.add_parser("ignore")
+    ignore_parser.add_argument(
+        "nixos_version",
+        help="Do not create a release for this specific branch. E.g. `24.11`.",
+    )
+    ignore_parser.set_defaults(command=Ignore)
 
     doc_parser = subparser.add_parser("doc")
     doc_parser.set_defaults(command=Doc)
