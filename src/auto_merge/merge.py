@@ -110,32 +110,39 @@ def run(
     matrix_hookshot = MatrixHookshot(matrix_hookshot_url)
     gh = Github(auth=Auth.Token(github_access_token))
     action_run_repo = gh.get_repo(action_run_repo_name)
-    try:
-        runs = action_run_repo.get_workflow("auto-merge.yaml").get_runs(
-            status="completed"
-        )
-        download_url = ""
-        for artifact in runs[0].get_artifacts():
-            if artifact.name == "status-json":
-                download_url = artifact.archive_download_url
+    status = {}
+    runs = action_run_repo.get_workflow("auto-merge.yaml").get_runs(
+        status="completed"
+    )
+    for run_ in runs:
+        try:
+            download_url = ""
+            for artifact in run_.get_artifacts():
+                if artifact.name == "status-json":
+                    download_url = artifact.archive_download_url
+                    break
+            with tempfile.TemporaryDirectory() as tmpdir:
+                r = requests.get(
+                    download_url,
+                    headers={"Authorization": f"Bearer {github_access_token}"},
+                )
+                r.raise_for_status()
+                z = zipfile.ZipFile(BytesIO(r.content))
+                z.extractall(tmpdir)
+                status = json.load(
+                    (Path(tmpdir) / "auto-merge-status.json").open()
+                )
+                logging.info(
+                    f"Found auto-merge-status.json with contents: {json.dumps(status)}"
+                )
                 break
-        with tempfile.TemporaryDirectory() as tmpdir:
-            r = requests.get(
-                download_url,
-                headers={"Authorization": f"Bearer {github_access_token}"},
+        except Exception as e:
+            logging.debug(
+                "Error happened while fetching auto-merge-status.json: ",
+                exc_info=e,
             )
-            r.raise_for_status()
-            z = zipfile.ZipFile(BytesIO(r.content))
-            z.extractall(tmpdir)
-            status = json.load((Path(tmpdir) / "auto-merge-status.json").open())
-            logging.info(
-                f"Found auto-merge-status.json with contents: {json.dumps(status)}"
-            )
-    except Exception as e:
-        logging.debug(
-            "Error happened while fetching auto-merge-status.json: ", exc_info=e
-        )
-        status = {}
+            continue
+    if status == {}:
         logging.info("Didn't found auto-merge-status.json in GitHub")
 
     fc_nixos_url = f"https://x-access-token:{github_access_token}@github.com/{config.general.fc_nixos_repo_name}"
