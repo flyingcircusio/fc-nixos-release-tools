@@ -192,6 +192,10 @@ def check_pr_mergeable(
     for workflow_run in workflow_runs:
         if workflow_run["name"] == "check-auto-mergeability-of-pr":
             continue
+        if workflow_run["name"] == "Backport Pull Request":
+            continue
+        if workflow_run["bucket"] == "skipping":
+            continue
         if workflow_run["bucket"] != "pass":
             logging.info(
                 f"PR {pr.number} has unsuccessful workflow run {workflow_run['name']} (state {workflow_run['bucket']}). Not mergeable."
