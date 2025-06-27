@@ -54,7 +54,6 @@ def nixpkgs_repository(directory: str, remotes: dict[str, Remote]) -> Repo:
 def check_nixpkgs_up_to_date(
     nixpkgs_repo: Repo,
     fc_nixos_dir: str,
-    fc_nixos_target_branch: str,
     nixpkgs_target_branch: str,
     integration_branch: str,
     fc_nixos_pr: PullRequest,
@@ -63,9 +62,9 @@ def check_nixpkgs_up_to_date(
     fc_nixos_repo = Repo(fc_nixos_dir)
     versions_json_path = Path(fc_nixos_dir) / "release" / "versions.json"
 
-    # HEAD = the head of the merged PR (before merge)
-    # XXX: This makes an assumption that the PR only contains 1 commit. This should be cleaned up.
-    merge_base = fc_nixos_repo.git.rev_parse("HEAD^")
+    # The merge base is the commit before the first commit of the PR
+    first_pr_commit = fc_nixos_pr.get_commits()[0]
+    merge_base = fc_nixos_repo.git.rev_parse(f"{first_pr_commit.sha}^")
     # The integration branch is directly branched of the target branch, so we can only have one merge base.
     fc_nixos_repo.git.switch(merge_base, detach=True)
 
@@ -168,7 +167,6 @@ def run(
     if not check_nixpkgs_up_to_date(
         nixpkgs_repo,
         fc_nixos_dir,
-        fc_nixos_pr.base.ref,
         nixpkgs_target_branch,
         integration_branch,
         fc_nixos_pr,
