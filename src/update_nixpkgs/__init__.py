@@ -1,12 +1,29 @@
 import argparse
 import os
 import sys
+from dataclasses import dataclass
 from logging import INFO, basicConfig
 
 FC_NIXOS_REPO = "flyingcircusio/fc-nixos"
 NIXPKGS_REPO = "flyingcircusio/nixpkgs"
-# Mapping of platform version to nixos branch
-VERSIONS = {"25.05": "nixos-25.05"}
+
+
+@dataclass
+class NixpkgsBranchPattern:
+    upstream_branch: str
+    fc_branch: str
+
+
+VERSIONS = {
+    "25.05": NixpkgsBranchPattern(
+        upstream_branch="nixos-25.05",
+        fc_branch="nixos-25.05",
+    ),
+    "25.11": NixpkgsBranchPattern(
+        upstream_branch="nixos-unstable",
+        fc_branch="nixos-25.11",
+    ),
+}
 
 
 def main():

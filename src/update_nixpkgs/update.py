@@ -89,7 +89,8 @@ def nixpkgs_repository(directory: str, remotes: dict[str, Remote]) -> Repo:
 
 def rebase_nixpkgs(
     nixpkgs_repo: Repo,
-    branch_to_rebase: str,
+    nixpkgs_upstream_branch: str,
+    nixpkgs_fc_branch: str,
     integration_branch: str,
     last_day_integration_branch: str,
     force: bool,
@@ -104,16 +105,18 @@ def rebase_nixpkgs(
     ):
         logging.info("Creating new integration branch")
         tracking_branch = nixpkgs_repo.create_head(
-            integration_branch, f"origin/{branch_to_rebase}"
+            integration_branch, f"origin/{nixpkgs_fc_branch}"
         )
         tracking_branch.checkout()
     else:
         logging.info("Checking out existing integration branch")
         nixpkgs_repo.git.checkout(integration_branch)
 
-    latest_upstream = nixpkgs_repo.refs[f"upstream/{branch_to_rebase}"].commit
+    latest_upstream = nixpkgs_repo.refs[
+        f"upstream/{nixpkgs_upstream_branch}"
+    ].commit
     common_grounds = nixpkgs_repo.merge_base(
-        f"upstream/{branch_to_rebase}", "HEAD"
+        f"upstream/{nixpkgs_upstream_branch}", "HEAD"
     )
 
     if (
@@ -123,23 +126,23 @@ def rebase_nixpkgs(
         or force
     ):
         logging.info(
-            f"Latest commit of {branch_to_rebase} is '{latest_upstream.hexsha}' which is not part of our fork, rebasing."
+            f"Latest commit of upstream/{nixpkgs_upstream_branch} is '{latest_upstream.hexsha}' which is not part of our fork, rebasing."
         )
         current_state = nixpkgs_repo.head.commit
         try:
-            nixpkgs_repo.git.rebase(f"upstream/{branch_to_rebase}")
+            nixpkgs_repo.git.rebase(f"upstream/{nixpkgs_upstream_branch}")
         except GitCommandError:
             logging.exception("nixpkgs rebase failed")
             matrix_hookshot.send_notification(
                 f"""\
-update-nixpkgs: ERROR nixpkgs rebase failed for `{branch_to_rebase}`. Please resolve the conflict manually with the following commands:
+update-nixpkgs: ERROR nixpkgs rebase failed for `{nixpkgs_fc_branch}`. Please resolve the conflict manually with the following commands:
 
 ```
 cd nixpkgs
 git fetch upstream
 git fetch origin
-git checkout -b {integration_branch} origin/{branch_to_rebase}
-git rebase upstream/{branch_to_rebase}
+git checkout -b {integration_branch} origin/{nixpkgs_fc_branch}
+git rebase upstream/{nixpkgs_upstream_branch}
 git push origin {integration_branch}
 ```
 And run the action (https://github.com/flyingcircusio/fc-nixos-release-tools/actions/workflows/update-nixpkgs.yaml) afterwards.
@@ -163,7 +166,7 @@ And run the action (https://github.com/flyingcircusio/fc-nixos-release-tools/act
 
         return NixpkgsRebaseResult(
             upstream_commit=latest_upstream,
-            fork_commit=nixpkgs_repo.refs[f"origin/{branch_to_rebase}"].commit,
+            fork_commit=nixpkgs_repo.refs[f"origin/{nixpkgs_fc_branch}"].commit,
             fork_before_rebase=current_state,
             fork_after_rebase=nixpkgs_repo.head.commit,
         )
@@ -297,7 +300,7 @@ def run(
     today = datetime.date.today().isoformat()
     yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
 
-    for platform_version, nixpkgs_target_branch in VERSIONS.items():
+    for platform_version, nixpkgs_branch_pattern in VERSIONS.items():
         logging.info(f"Updating platform {platform_version}")
         fc_nixos_target_branch = f"fc-{platform_version}-dev"
         integration_branch = (
@@ -308,11 +311,13 @@ def run(
         )
 
         remotes = {
-            "upstream": Remote(nixpkgs_upstream_url, [nixpkgs_target_branch]),
+            "upstream": Remote(
+                nixpkgs_upstream_url, [nixpkgs_branch_pattern.upstream_branch]
+            ),
             "origin": Remote(
                 nixpkgs_origin_url,
                 [
-                    nixpkgs_target_branch,
+                    nixpkgs_branch_pattern.fc_branch,
                     integration_branch,
                     last_day_integration_branch,
                 ],
@@ -321,7 +326,8 @@ def run(
         nixpkgs_repo = nixpkgs_repository(nixpkgs_dir, remotes)
         if result := rebase_nixpkgs(
             nixpkgs_repo,
-            nixpkgs_target_branch,
+            nixpkgs_branch_pattern.upstream_branch,
+            nixpkgs_branch_pattern.fc_branch,
             integration_branch,
             last_day_integration_branch,
             force,

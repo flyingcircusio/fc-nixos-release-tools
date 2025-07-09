@@ -153,13 +153,13 @@ def run(
     fc_nixos_pr = gh.get_repo(FC_NIXOS_REPO).get_pull(int(merged_pr_id))
     pr_platform_version = fc_nixos_pr.base.ref.split("-")[1]
     integration_branch = fc_nixos_pr.head.ref
-    nixpkgs_target_branch = VERSIONS[pr_platform_version]
+    nixpkgs_target_fc_branch = VERSIONS[pr_platform_version].fc_branch
     matrix_hookshot = MatrixHookshot(matrix_hookshot_url)
 
     remotes = {
         "origin": Remote(
             nixpkgs_origin_url,
-            [integration_branch, nixpkgs_target_branch],
+            [integration_branch, nixpkgs_target_fc_branch],
         )
     }
 
@@ -167,7 +167,7 @@ def run(
     if not check_nixpkgs_up_to_date(
         nixpkgs_repo,
         fc_nixos_dir,
-        nixpkgs_target_branch,
+        nixpkgs_target_fc_branch,
         integration_branch,
         fc_nixos_pr,
         matrix_hookshot,
@@ -177,10 +177,10 @@ def run(
         )
         return
     if promote_nixpkgs(
-        gh, nixpkgs_repo, nixpkgs_target_branch, integration_branch
+        gh, nixpkgs_repo, nixpkgs_target_fc_branch, integration_branch
     ):
         fc_nixos_pr.create_issue_comment(
-            f"Promoted this nixpkgs integration branch to the `{nixpkgs_target_branch}` branch successfully."
+            f"Promoted this nixpkgs integration branch to the `{nixpkgs_target_fc_branch}` branch successfully."
         )
         cleanup_old_prs_and_branches(
             gh, integration_branch, fc_nixos_pr.base.ref
