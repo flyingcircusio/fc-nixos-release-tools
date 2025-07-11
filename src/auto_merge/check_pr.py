@@ -9,6 +9,8 @@ def check_pr(pr_id: int, github_access_token: str, config: Config):
     repository = gh.get_repo(config.general.fc_nixos_repo_name)
 
     pr = repository.get_pull(pr_id)
+    if not utils.check_if_active_for_pr(pr, config):
+        return
     risk, urgency = utils.get_label_values_for_pr(pr.labels)
     if risk is None or urgency is None:
         # This raises a runtime error, so it shows as a red check indicator in GitHub

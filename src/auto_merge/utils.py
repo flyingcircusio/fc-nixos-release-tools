@@ -101,6 +101,26 @@ def get_label_values_for_pr(labels: list[Label]) -> (int | None, int | None):
     return risk, urgency
 
 
+def check_if_active_for_pr(pr: PullRequest, config: Config) -> bool:
+    """
+    Checks whether auto-merge is active for a given PR.
+
+    Also checks that the PR is against a dev branch.
+    """
+    if (
+        re.match(
+            rf"^fc-({'|'.join(config.general.platform_versions)})-dev$",
+            pr.base.ref,
+        )
+        is None
+    ):
+        logging.info(
+            f"PR {pr.number} is not against a allowed dev branch. Not auto mergeable."
+        )
+        return False
+    return True
+
+
 def check_pr_mergeable(
     repo: Repository, pr: PullRequest, token: str, config: Config
 ) -> bool:
@@ -129,17 +149,7 @@ def check_pr_mergeable(
         logging.info(f"PR {pr.number} is marked is draft. Not mergeable.")
         return False
 
-    # Check that this PR is against a dev branch
-    if (
-        re.match(
-            rf"^fc-({'|'.join(config.general.platform_versions)})-dev$",
-            pr.base.ref,
-        )
-        is None
-    ):
-        logging.info(
-            f"PR {pr.number} is not against a allowed dev branch. Not auto mergeable."
-        )
+    if not check_if_active_for_pr(pr, config):
         return False
 
     # Check if the PR has enough approvals
