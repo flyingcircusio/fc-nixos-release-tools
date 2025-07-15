@@ -242,8 +242,13 @@ def update_fc_nixos(
             PACKAGE_VERSIONS_PATH,
         ]
     )
-    repo.git.commit(message=f"Auto update nixpkgs to {new_hex_sha}")
-    repo.git.push("origin", integration_branch, force=True)
+    if repo.is_dirty():
+        repo.git.commit(message=f"Auto update nixpkgs to {new_hex_sha}")
+        repo.git.push("origin", integration_branch, force=True)
+    else:
+        logging.info(
+            "No changes to commit. Continue with next platform version."
+        )
     os.chdir(original_workdir)
 
 
