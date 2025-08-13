@@ -122,6 +122,9 @@ class Branch(Command):
     @step(skip_seen=False)
     def check_releasetest_machines(self):
         """Verify release test staging machines are up to date."""
+        # Trigger rolling release update as here to prevent getting stuck here when the directory hasn't yet
+        # updated its view on the staging env
+        trigger_rolling_release_update()
         prefix = machine_prefix(self.branch.nixos_version)
         verify_machines_are_current(
             f"{prefix}stag", self.staging_build.nix_name
@@ -166,7 +169,7 @@ class Branch(Command):
         """Verify Sensu is green."""
         prefix = machine_prefix(self.branch.nixos_version)
         print(
-            f"Staging: releasetest sensu checks green? Look at https://sensu.rzob.gocept.net/#/clients?q={prefix} [Enter to confirm]"
+            f"Staging: releasetest sensu checks green? Look at https://sensu.rzob.gocept.net/#/clients?q={prefix}"
         )
         while not Confirm.ask("Is sensu green?"):
             pass
@@ -250,8 +253,6 @@ class Branch(Command):
         print(f"Create directory release for {self.branch.branch_prod}")
         print()
         print(" > https://directory.fcio.net/environments")
-
-        trigger_rolling_release_update()
 
         print()
         print(f"Release name: [cyan]{self.release.id}[/cyan]")
