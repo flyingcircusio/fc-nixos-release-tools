@@ -9,6 +9,10 @@ from release.utils import execute
 from .utils import WORK_DIR
 
 
+class GitError(RuntimeError):
+    cmd_out: str
+
+
 class GitRepo:
     """A helper class to wrap git interactions.
 
@@ -24,15 +28,18 @@ class GitRepo:
         self.path = path
         self.origin = origin
 
-    def _git_raw(self, *cmd: tuple[str]):
+    def _git_raw(self, *cmd: str):
         return execute(("git",) + cmd, cwd=self.path)
 
-    def _git(self, *cmd: tuple[str], check=True):
+    def _git(self, *cmd: str, check=True) -> str:
         rc, output = execute(("git",) + cmd, cwd=self.path)
 
         if check and rc:
-            print(output.joined.getvalue())
-            raise RuntimeError("cmd returned with exit code {rc}")
+            err = GitError(f"{cmd} returned with exit code {rc}.\n")
+            # provide command output for further analysis up the callchain
+            err.cmd_out = output.joined.getvalue()
+            print(err.cmd_out)
+            raise err
 
         return output.stdout.getvalue()
 

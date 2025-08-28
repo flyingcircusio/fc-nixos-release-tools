@@ -9,7 +9,7 @@ from rich.markdown import Markdown
 from rich.prompt import Confirm, Prompt
 
 from .command import Command, step
-from .git import FC_NIXOS
+from .git import FC_NIXOS, GitError
 from .markdown import MarkdownTree
 from .state import Release
 from .utils import (
@@ -219,19 +219,81 @@ class Branch(Command):
 
         self.branch.changelog = new_fragment.to_str()
 
+    def _push_branch_with_retry(self, branch_name: str, can_rebase: bool):
+        """Push a single branch with dry-run, error handling, and retry logic."""
+        # Perform dry-run first to check if push would succeed
+        print(f"[cyan]Dry-run push for {branch_name}...[/cyan]")
+        try:
+            FC_NIXOS._git("push", "--dry-run", "origin", branch_name)
+            needs_rebase = False
+        except GitError as e:
+            # Check if this is specifically a non-fast-forward/diverged remote error
+            diverged_remote_patterns = ["(non-fast-forward)", "(fetch first)"]
+
+            breakpoint()
+            if not any(
+                pattern in e.cmd_out for pattern in diverged_remote_patterns
+            ):
+                # Some other error occurred - re-raise it
+                raise RuntimeError(
+                    f"Dry-run push failed for {branch_name} with unexpected error: {e}"
+                )
+
+            if not can_rebase:
+                # Production push must not fail even on dry-run
+                raise RuntimeError(
+                    f"Failed dry-run push for production branch ({branch_name}). "
+                    f"Production is expected to progress linearly and must not fail. "
+                    f"Remote has diverged: {e}"
+                )
+
+            print(
+                f"[yellow]Dry-run detected diverged remote for {branch_name}, will rebase first[/yellow]"
+            )
+            needs_rebase = True
+
+        # Handle rebase if needed (based on dry-run results)
+        if needs_rebase:
+            print(f"[yellow]Rebasing {branch_name} onto remote...[/yellow]")
+            try:
+                # Pull the remote branch to get latest changes
+                FC_NIXOS._git("fetch", "origin", branch_name)
+                # Rebase onto the remote branch
+                FC_NIXOS._git("rebase", f"origin/{branch_name}")
+                print(f"[green]Successfully rebased {branch_name}[/green]")
+            except RuntimeError as rebase_error:
+                logging.error(f"Failed to rebase {branch_name}: {rebase_error}")
+                raise
+
+        # Actual push
+        print(f"[cyan]Pushing {branch_name}...[/cyan]")
+        try:
+            FC_NIXOS._git("push", "origin", branch_name)
+            print(f"[green]Successfully pushed {branch_name}[/green]")
+        except RuntimeError as e:
+            # This should not happen if dry-run passed or rebase succeeded
+            logging.error(f"Unexpected push failure for {branch_name}: {e}")
+            raise
+
     @step(skip_seen=False)
     def push(self):
         """Push repository."""
         remote = FC_NIXOS._git("remote", "get-url", "--push", "origin").strip()
         print(f"[bold purple]Pushing changes to [green]{remote}[/green] ...")
 
-        FC_NIXOS._git(
-            "push",
-            "origin",
-            self.branch.branch_dev,
-            self.branch.branch_stag,
-            self.branch.branch_prod,
-        )
+        # Push branches sequentially with dry-run, error handling, and retry logic
+        branches_to_push = [
+            # (branch_name, can_rebase)
+            # dev and staging branch are allowed to fail their initial dry-push,
+            # there might have been CI-triggered merges in the background. Just rebase the head then.
+            (self.branch.branch_dev, True),
+            (self.branch.branch_stag, True),
+            # But the production branch must not fail pushing, it is only supposed to be modified durign this exact release process.
+            (self.branch.branch_prod, False),
+        ]
+
+        for branch_spec in branches_to_push:
+            self._push_branch_with_retry(*branch_spec)
 
     # Hydra now starts building the production branch
 
