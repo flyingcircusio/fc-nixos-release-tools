@@ -221,6 +221,9 @@ def update_fc_nixos(
             text=True,
         )
     except subprocess.CalledProcessError as e:
+        logging.exception(
+            "Updating fc-nixos nix references failed for {target_branch}."
+        )
         matrix_hookshot.send_notification(
             dedent(
                 f"""\
@@ -234,6 +237,8 @@ def update_fc_nixos(
             ```"""
             )
         )
+        # This shouldn't happen. Raise to the top.
+        raise
 
     repo.git.add(
         [
