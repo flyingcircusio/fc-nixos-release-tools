@@ -90,6 +90,8 @@ class Branch(Command):
     @step
     def review_staging_prod_changes(self):
         """Spot-check changes"""
+        # update staging branch one more time, in case an auto-merge happened
+        FC_NIXOS.checkout(self.branch.branch_stag)
         FC_NIXOS.pull()
         print(
             f"The following commits will be merged from "
@@ -108,7 +110,7 @@ class Branch(Command):
         ):
             pass
 
-    @step(skip_seen=False)
+    @step(skip_seen=True)  # see next step, PL-134031
     def check_hydra(self):
         """Wait for clean build for [cyan]{self.branch.branch_stag}[/cyan] on Hydra"""
         orig_stag_rev = self.branch.orig_staging_commit
@@ -119,7 +121,12 @@ class Branch(Command):
             f"[green]Detected green build [cyan]{self.staging_build.eval_id}[/cyan] on Hydra.[/green]"
         )
 
-    @step(skip_seen=False)
+    @step(
+        # skipping this at further invocations is important, as the staging
+        # branch might advance in background to a different git revision than
+        # the expected pinned one (PL-1314031)
+        skip_seen=True
+    )
     def check_releasetest_machines(self):
         """Verify release test staging machines are up to date."""
         # Trigger rolling release update as here to prevent getting stuck here when the directory hasn't yet
@@ -164,7 +171,7 @@ class Branch(Command):
             )
             raise
 
-    @step(skip_seen=False)
+    @step
     def check_sensu(self):
         """Verify Sensu is green."""
         prefix = machine_prefix(self.branch.nixos_version)
