@@ -237,7 +237,6 @@ class Branch(Command):
             # Check if this is specifically a non-fast-forward/diverged remote error
             diverged_remote_patterns = ["(non-fast-forward)", "(fetch first)"]
 
-            breakpoint()
             if not any(
                 pattern in e.cmd_out for pattern in diverged_remote_patterns
             ):
