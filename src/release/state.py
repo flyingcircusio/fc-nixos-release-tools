@@ -9,8 +9,8 @@ STATE_FILE = Path("state.json")
 
 
 class Release(BaseModel):
-    id: str = None
-    date: datetime.date = None
+    id: str | None = None
+    date: datetime.date | None = None
     branches: dict[str, "Branch"] = {}
     steps: set = set()
 
