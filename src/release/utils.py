@@ -327,7 +327,7 @@ def verify_machines_are_current(prefix, nix_name):
 def wait_for_vm_reboot(machine: str, progress):
     task = progress.add_task(f"Waiting for reboot of {machine}", total=None)
 
-    while not progress.finished:
+    while not progress.tasks[task].finished:
         proc = subprocess.run(
             ["ping6", "-c", "1", machine], capture_output=True
         )
