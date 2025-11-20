@@ -1,7 +1,9 @@
 """Manage the release workflow for a single branch."""
 
+import datetime
 import logging
 import subprocess
+from zoneinfo import ZoneInfo
 
 import requests
 from rich import print
@@ -325,7 +327,15 @@ class Branch(Command):
         print()
         print(f"Release name: [cyan]{self.release.id}[/cyan]")
         print(f"  Hydra eval: [cyan]{self.branch.hydra_eval_id}[/cyan]")
-        print(f"  Valid from: [cyan]{self.release.date} 7:00 PM UTC[/cyan]")
+
+        # we always release at 21:00 CE(S)T but enter time in UTC.
+        release_time = datetime.datetime.combine(
+            self.release.date,
+            datetime.time(hour=21, minute=0, tzinfo=ZoneInfo("Europe/Berlin")),
+        ).astimezone(datetime.UTC)
+        print(
+            f"  Valid from: [cyan]{release_time.strftime('%d.%m.%Y %H:%M %Z')}[/cyan]"
+        )
         print()
 
         while not Confirm.ask("Did you add the release?"):
