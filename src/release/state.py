@@ -1,11 +1,17 @@
 import datetime
 from pathlib import Path
+from typing import Optional
 
 from pydantic import BaseModel
 
 from .git import FC_NIXOS
 
 STATE_FILE = Path("state.json")
+
+
+class HydraReleaseBuild(BaseModel):
+    nix_name: str
+    eval_id: str
 
 
 class Release(BaseModel):
@@ -43,6 +49,8 @@ class Branch(BaseModel):
     hydra_eval_id: str = ""
     changelog: str = ""
     steps: set = set()
+    staging_build: Optional[HydraReleaseBuild] = None
+    production_build: Optional[HydraReleaseBuild] = None
 
     @property
     def branch_dev(self):

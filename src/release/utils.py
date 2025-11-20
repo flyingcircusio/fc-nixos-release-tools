@@ -1,7 +1,4 @@
 import argparse
-import asyncio
-import asyncio.subprocess
-import io
 import json
 import os
 import re
@@ -9,7 +6,6 @@ import shlex
 import socket
 import subprocess
 import time
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -17,8 +13,10 @@ import requests
 from rich import get_console, print
 from rich.progress import Progress
 
+from .common import WORK_DIR
+from .state import HydraReleaseBuild
+
 EDITOR = shlex.split(os.environ.get("EDITOR", "nano"))
-WORK_DIR = Path("work")
 
 TEMP_CHANGELOG = WORK_DIR / "temp_changelog.md"
 HYDRA_URL = "https://hydra.flyingcircus.io"
@@ -156,12 +154,6 @@ def get_hydra_build(eval_id: str, job: str):
     return r.json()
 
 
-@dataclass
-class HydraReleaseBuild:
-    nix_name: str
-    eval_id: str
-
-
 def trigger_rolling_release_update():
     with Progress(transient=True) as progress:
         task = progress.add_task(
@@ -199,12 +191,14 @@ def trigger_doc_update():
         progress.update(task, total=1, advance=1)
 
 
-def wait_for_successful_hydra_release_build(branch: str, commit_hash: str):
+def wait_for_successful_hydra_release_build(
+    branch: str, commit_hash: str
+) -> HydraReleaseBuild:
     eval_id, build = wait_for_successful_hydra_build(
         branch, commit_hash, "release"
     )
     nix_name = build["nixname"].split("release-")[1]
-    return HydraReleaseBuild(nix_name, eval_id)
+    return HydraReleaseBuild(nix_name=nix_name, eval_id=str(eval_id))
 
 
 def wait_for_successful_hydra_build(
@@ -380,60 +374,3 @@ def run_maintenance_switch_on_vm(machine: str):
                     print("STDERR:", stderr)
                     raise
             progress.update(task, advance=1)
-
-
-# https://stackoverflow.com/questions/65649412/getting-live-output-from-asyncio-subprocess
-
-
-async def _read_stream(stream, cb):
-    while True:
-        line = await stream.readline()
-        if line:
-            cb(line)
-        else:
-            break
-
-
-async def _stream_subprocess(cmd, output, **kw):
-    process = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        # bufsize=1,
-        **kw,
-    )
-
-    await asyncio.gather(
-        _read_stream(process.stdout, output.receive_stdout),
-        _read_stream(process.stderr, output.receive_stderr),
-    )
-    return await process.wait()
-
-
-class Output:
-    def __init__(self, log):
-        self.log = log
-        self.joined = io.StringIO()
-        self.stdout = io.StringIO()
-        self.stderr = io.StringIO()
-
-    def receive_stdout(self, line):
-        line = line.decode("utf-8")
-        self.log.write(line)
-        self.joined.write(line)
-        self.stdout.write(line)
-
-    def receive_stderr(self, line):
-        line = line.decode("utf-8")
-        self.log.write(line)
-        self.joined.write(line)
-        self.stderr.write(line)
-
-
-def execute(cmd, **kw):
-    with open("commands.log", "a") as log:
-        output = Output(log)
-        cmd_repr = shlex.join(cmd)
-        output.log.write(f"$ {cmd_repr}\n")
-        rc = asyncio.run(_stream_subprocess(cmd, output, **kw))
-        return rc, output
