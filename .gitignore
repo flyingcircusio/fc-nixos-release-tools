@@ -4,6 +4,8 @@
 __pycache__
 result
 *.sublime-*
+/.claude/settings.local.json
+CLAUDE.local.md
 
 # don't regularly check in the release state
 /state.json
