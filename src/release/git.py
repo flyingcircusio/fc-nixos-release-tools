@@ -4,9 +4,7 @@ from pathlib import Path
 
 from rich import print
 
-from release.utils import execute
-
-from .utils import WORK_DIR
+from .common import WORK_DIR, execute
 
 
 class GitError(RuntimeError):

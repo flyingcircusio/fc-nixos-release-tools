@@ -1,7 +1,9 @@
 """Manage the release workflow for a single branch."""
 
+import datetime
 import logging
 import subprocess
+from zoneinfo import ZoneInfo
 
 import requests
 from rich import print
@@ -114,11 +116,11 @@ class Branch(Command):
     def check_hydra(self):
         """Wait for clean build for [cyan]{self.branch.branch_stag}[/cyan] on Hydra"""
         orig_stag_rev = self.branch.orig_staging_commit
-        self.staging_build = wait_for_successful_hydra_release_build(
+        self.branch.staging_build = wait_for_successful_hydra_release_build(
             self.branch.branch_stag, orig_stag_rev
         )
         print(
-            f"[green]Detected green build [cyan]{self.staging_build.eval_id}[/cyan] on Hydra.[/green]"
+            f"[green]Detected green build [cyan]{self.branch.staging_build.eval_id}[/cyan] on Hydra.[/green]"
         )
 
     @step(
@@ -134,7 +136,7 @@ class Branch(Command):
         trigger_rolling_release_update()
         prefix = machine_prefix(self.branch.nixos_version)
         verify_machines_are_current(
-            f"{prefix}stag", self.staging_build.nix_name
+            f"{prefix}stag", self.branch.staging_build.nix_name
         )
 
     @step
@@ -307,10 +309,10 @@ class Branch(Command):
     def check_hydra_production(self):
         """Verify Hydra build for [cyan]{self.branch.branch_prod}[/cyan]."""
         prod_rev = self.branch.new_production_commit
-        self.production_build = wait_for_successful_hydra_release_build(
+        self.branch.production_build = wait_for_successful_hydra_release_build(
             self.branch.branch_prod, prod_rev
         )
-        self.branch.hydra_eval_id = str(self.production_build.eval_id)
+        self.branch.hydra_eval_id = str(self.branch.production_build.eval_id)
         print(
             f"[green]Detected green build [cyan]{self.branch.hydra_eval_id}[/cyan] on Hydra.[/green]"
         )
@@ -325,7 +327,15 @@ class Branch(Command):
         print()
         print(f"Release name: [cyan]{self.release.id}[/cyan]")
         print(f"  Hydra eval: [cyan]{self.branch.hydra_eval_id}[/cyan]")
-        print(f"  Valid from: [cyan]{self.release.date} 7:00 PM UTC[/cyan]")
+
+        # we always release at 21:00 CE(S)T but enter time in UTC.
+        release_time = datetime.datetime.combine(
+            self.release.date,
+            datetime.time(hour=21, minute=0, tzinfo=ZoneInfo("Europe/Berlin")),
+        ).astimezone(datetime.UTC)
+        print(
+            f"  Valid from: [cyan]{release_time.strftime('%d.%m.%Y %H:%M %Z')}[/cyan]"
+        )
         print()
 
         while not Confirm.ask("Did you add the release?"):
@@ -336,7 +346,7 @@ class Branch(Command):
         """Verify production release test machines."""
         prefix = machine_prefix(self.branch.nixos_version)
         verify_machines_are_current(
-            f"{prefix}prod", self.production_build.nix_name
+            f"{prefix}prod", self.branch.production_build.nix_name
         )
         print(
             "Check maintenance log, check switch output for unexpected service restarts, compare with changelog, impact properly documented? You can edit the changelog in the next step."
