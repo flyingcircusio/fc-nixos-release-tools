@@ -15,10 +15,6 @@ class NixpkgsBranchPattern:
 
 
 VERSIONS = {
-    "25.05": NixpkgsBranchPattern(
-        upstream_branch="nixos-25.05",
-        fc_branch="nixos-25.05",
-    ),
     "25.11": NixpkgsBranchPattern(
         upstream_branch="nixos-25.11",
         fc_branch="nixos-25.11",
