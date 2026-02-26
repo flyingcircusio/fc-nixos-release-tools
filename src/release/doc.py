@@ -97,7 +97,6 @@ def collect_changelogs(release) -> MarkdownTree:
     changelog = MarkdownTree.from_sections(
         "Impact",
         *(f"NixOS {k} platform" for k in sorted(release.work_branches)),
-        "Documentation",
         "Detailed Changes",
     )
     for _, branch in sorted(release.work_branches.items()):
@@ -115,7 +114,6 @@ def collect_changelogs(release) -> MarkdownTree:
                 )
             )
         changelog |= frag
-    changelog["Documentation"] += "<!--\nadd entries if necessary\n-->"
     changelog.move_to_end("Detailed Changes")
     changelog.add_header(f"Release {release.id} ({release.date.isoformat()})")
     changelog.entries.insert(
