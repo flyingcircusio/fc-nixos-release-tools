@@ -20,7 +20,7 @@ VERSIONS = {
         fc_branch="nixos-25.11",
     ),
     "26.05": NixpkgsBranchPattern(
-        upstream_branch="nixos-unstable",
+        upstream_branch="nixos-26.05",
         fc_branch="nixos-26.05",
     ),
 }
