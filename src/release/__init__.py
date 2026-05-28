@@ -71,6 +71,7 @@ class Start(Command):
 - [ ] Announcements
 
   - [ ] [Create maintenance status page](https://manage.statuspage.io/pages/vk1n4gx65z5k/incidents/new-scheduled-maintenance)
+    - [ ] rollout duration: 2 hours
     - [ ] only enable notifications for creating the maintenance, don't remind about progress
     - [ ] don't automate component status
     - [ ] do automate progress (open/resolve)
