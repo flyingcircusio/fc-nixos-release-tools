@@ -30,6 +30,7 @@ def generate_nixpkgs_changelog(old_rev: str, new_rev: str) -> MarkdownTree:
         f"- [platform code](https://github.com/flyingcircusio/fc-nixos/"
         f"compare/{old_rev}...{new_rev})"
     )
+    kernel_reboot = False
 
     pversions_path = "release/package-versions.json"
     try:
@@ -48,10 +49,20 @@ def generate_nixpkgs_changelog(old_rev: str, new_rev: str) -> MarkdownTree:
             elif old != new:
                 lines.append(f"{pkg_name}: {old} -> {new}")
 
+            if (
+                pkg_name in ["linuxKernelStable", "linuxKernelVerify"]
+                and old != new
+            ):
+                kernel_reboot = True
+
         if lines:
             res["NixOS XX.XX platform"] += (
                 "- Pull upstream NixOS changes, security fixes, and "
                 "package updates:" + "".join("\n    - " + m for m in lines)
+            )
+        if kernel_reboot:
+            res["Impact"] += (
+                "- Machines will reboot to activate a changed kernel."
             )
     except subprocess.CalledProcessError:
         logging.warning(
