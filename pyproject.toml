@@ -15,12 +15,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "fc-nixos-release-tools"
 version = "0.1dev"
-requires-python = ">= 3.11"
+requires-python = ">= 3.13"
 # KEEP SORTED!
 dependencies = [
     "gitpython>=3.1",
     "gql[requests]~=3.5",
-    "pydantic>=2.11.3",
+    "pydantic>=2.14.0",
     "pygithub>=2.5",
     "python-dateutil>=2.9",
     "requests[socks]>=2.32",
@@ -30,7 +30,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-  "pytest>=7.4"
+  "pytest>=9.0"
 ]
 
 [project.scripts]
